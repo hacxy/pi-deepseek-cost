@@ -1,8 +1,8 @@
 {
   "name": "tpl-pi-extension",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "description": "A Pi extension project",
-  "keywords": ["pi-package", "pi", "pi-coding-agent", "ai", "agents", "cli"],
+  "keywords": ["pi-package", "pi-extension", "pi", "pi-coding-agent", "ai", "agents", "cli"],
   "type": "module",
   "pi": {
     "extensions": ["./src/index.ts"]
@@ -27,6 +27,6 @@
   },
   "license": "MIT",
   "lint-staged": {
-    "*": "biome check --write"
+    "*.{ts,tsx,js,jsx,json}": "biome check --write"
   }
 }
