@@ -1,5 +1,8 @@
 # pi-deepseek-cost
 
+[![npm version](https://img.shields.io/npm/v/pi-deepseek-cost.svg)](https://www.npmjs.com/package/pi-deepseek-cost)
+[![Pi package](https://img.shields.io/badge/pi-package-purple.svg)](https://pi.dev/packages)
+
 > [简体中文 (Chinese)](README_ZH.md) · [English](README.md)
 
 > A [Pi](https://pi.dev) extension that tracks your **DeepSeek usage & cost** — live session cost in the status bar, `/ds-cost` and `/ds-estimate` overlay panels, bilingual UI (中文/English) with currency switching, and optional peak/off-peak pricing.
@@ -16,10 +19,10 @@
 ## Installation
 
 ```bash
-# from npm (after this package is published)
+# from npm
 pi install npm:pi-deepseek-cost
 # or from a git repo
-pi install git:github.com/<you>/pi-deepseek-cost
+pi install git:github.com/hacxy/pi-deepseek-cost
 # or local path
 pi install ./pi-deepseek-cost
 ```
@@ -103,6 +106,14 @@ pnpm typecheck
 pnpm lint
 pnpm format
 ```
+
+## Release
+
+```bash
+pnpm release [patch|minor|major]   # bump, push, and watch the CI publish (default: patch)
+```
+
+Bumps the version via `npm version` (commit + `vX.Y.Z` tag), pushes `main` + tags, then watches the `publish.yml` CI run: lint → typecheck → test → `npm publish` (npm trusted publishing — no tokens) → changelogithub GitHub Release. Use `pnpm release --dry` to preview the commands without running them.
 
 ## License
 

@@ -1,5 +1,8 @@
 # pi-deepseek-cost
 
+[![npm version](https://img.shields.io/npm/v/pi-deepseek-cost.svg)](https://www.npmjs.com/package/pi-deepseek-cost)
+[![Pi package](https://img.shields.io/badge/pi-package-purple.svg)](https://pi.dev/packages)
+
 > [English](README.md) · [简体中文 (Chinese)](README_ZH.md)
 
 > 一个 [Pi](https://pi.dev) 扩展：追踪你的 **DeepSeek 用量与费用** —— 状态栏实时显示会话累计费用，`/ds-cost` 与 `/ds-estimate` 浮动弹窗，中英双语（货币随语言切换），可选峰谷计价支持。
@@ -16,7 +19,7 @@
 ## 安装
 
 ```bash
-# 从 npm（包发布后）
+# 从 npm
 pi install npm:pi-deepseek-cost
 # 或从 git 仓库
 pi install git:github.com/hacxy/pi-deepseek-cost
@@ -103,6 +106,14 @@ pnpm typecheck
 pnpm lint
 pnpm format
 ```
+
+## 发布
+
+```bash
+pnpm release [patch|minor|major]   # 升级版本、推送并监听 CI 发布（默认 patch）
+```
+
+通过 `npm version` 升级版本（提交 + `vX.Y.Z` tag），推送 `main` 与 tag，然后监听 `publish.yml` CI 运行：lint → typecheck → test → `npm publish`（npm 信任发布，无需 token）→ changelogithub 生成 GitHub Release。用 `pnpm release --dry` 可预览要执行的命令而不实际运行。
 
 ## 许可证
 
