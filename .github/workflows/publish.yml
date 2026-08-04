@@ -32,7 +32,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org/
+          # 不要设置 registry-url：setup-node 会写入 _authToken=${NODE_AUTH_TOKEN}
+          # 到 .npmrc（actions/setup-node #1551），让 npm 优先走 token 而非 OIDC，
+          # 导致 trusted publishing / provenance 失效。
           cache: pnpm
 
       - name: Install dependencies
@@ -62,9 +64,11 @@ jobs:
       # npm publish with OIDC: authentication happens automatically in the
       # GitHub Actions OIDC environment (trusted publisher must be configured
       # on npmjs.com for this workflow file). Provenance is generated
-      # automatically.
+      # automatically. unset NODE_AUTH_TOKEN forces the OIDC path.
       - name: Publish to npm
-        run: npm publish
+        run: |
+          unset NODE_AUTH_TOKEN
+          npm publish
 
       # Generate the GitHub Release changelog from Conventional Commits since
       # the last tag. Consider pinning (e.g. `npx changelogithub@15`) for a
