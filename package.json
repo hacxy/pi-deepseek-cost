@@ -25,7 +25,8 @@
   "pi": {
     "extensions": [
       "./src/index.ts"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/hacxy/pi-deepseek-cost/main/screenshots/ds-cost-en.png"
   },
   "scripts": {
     "dev": "pi -e ./src/index.ts",

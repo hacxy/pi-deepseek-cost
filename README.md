@@ -7,6 +7,12 @@
 
 > A [Pi](https://pi.dev) extension that tracks your **DeepSeek usage & cost** — live session cost in the status bar, `/ds-cost` and `/ds-estimate` overlay panels, bilingual UI (中文/English) with currency switching, and optional peak/off-peak pricing.
 
+## Screenshots
+
+![English cost panel](screenshots/ds-cost-en.png)
+
+![Animated demo](screenshots/demo.gif)
+
 ## Features
 
 - **Status bar**: live cumulative cost for the current session (`¥0.019`), refreshed after every turn — cost only, no noise (an empty session shows `¥0`)
