@@ -34,6 +34,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
+    "release": "node scripts/release.mjs",
+    "publish:first": "node scripts/publish-first.mjs",
     "typecheck": "tsc --noEmit",
     "prepare": "husky"
   },
