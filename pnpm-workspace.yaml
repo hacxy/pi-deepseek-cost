@@ -1,3 +1,9 @@
+# pnpm v11 enforces a 24h minimum release age by default (supply-chain
+# policy) — any lockfile entry published < 24h ago fails fresh installs in
+# CI. This project's own @hacxy/* config packages are frequently updated,
+# so opt out explicitly (pnpm's documented escape hatch).
+minimumReleaseAge: 0
+
 allowBuilds:
   '@google/genai': true
   esbuild: true
