@@ -1,32 +1,64 @@
 {
-  "name": "tpl-pi-extension",
-  "version": "0.0.0",
-  "description": "A Pi extension project",
-  "keywords": ["pi-package", "pi-extension", "pi", "pi-coding-agent", "ai", "agents", "cli"],
+  "name": "pi-deepseek-cost",
+  "version": "0.1.0",
+  "description": "DeepSeek usage & cost tracker for Pi — live session cost in the status bar, /ds-cost and /ds-estimate overlay panels, bilingual UI, peak/off-peak pricing support",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi",
+    "pi-coding-agent",
+    "deepseek",
+    "cost",
+    "usage",
+    "ai",
+    "agents",
+    "cli"
+  ],
   "type": "module",
+  "files": [
+    "src"
+  ],
   "pi": {
-    "extensions": ["./src/index.ts"]
+    "extensions": [
+      "./src/index.ts"
+    ]
   },
   "scripts": {
     "dev": "pi -e ./src/index.ts",
-    "lint": "biome check .",
-    "lint:fix": "biome check --write .",
-    "format": "biome format --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "prepare": "husky"
   },
-  "dependencies": {
-    "typebox": "^1.3.8"
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.0",
     "@earendil-works/pi-coding-agent": "latest",
+    "@earendil-works/pi-tui": "latest",
+    "@hacxy/eslint-config": "^0.6.0",
+    "@hacxy/prettier-config": "^0.0.6",
+    "@hacxy/tsconfig": "^0.1.6",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.0.0",
     "husky": "^9.1.7",
-    "lint-staged": "^17.2.0",
-    "typescript": "^5.5.0"
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^3.0.0"
   },
   "license": "MIT",
   "lint-staged": {
-    "*.{ts,tsx,js,jsx,json}": "biome check --write"
+    "*.{js,ts,jsx,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,css}": [
+      "prettier --write"
+    ]
   }
 }
