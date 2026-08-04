@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/pi-deepseek-cost.svg)](https://www.npmjs.com/package/pi-deepseek-cost)
 [![Pi package](https://img.shields.io/badge/pi-package-purple.svg)](https://pi.dev/packages)
 
-> [简体中文 (Chinese)](README_ZH.md) · [English](README.md)
+> [简体中文 (Chinese)](README_ZH.md)
 
 > A [Pi](https://pi.dev) extension that tracks your **DeepSeek usage & cost** — live session cost in the status bar, `/ds-cost` and `/ds-estimate` overlay panels, bilingual UI (中文/English) with currency switching, and optional peak/off-peak pricing.
 

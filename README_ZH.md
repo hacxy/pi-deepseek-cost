@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/pi-deepseek-cost.svg)](https://www.npmjs.com/package/pi-deepseek-cost)
 [![Pi package](https://img.shields.io/badge/pi-package-purple.svg)](https://pi.dev/packages)
 
-> [English](README.md) · [简体中文 (Chinese)](README_ZH.md)
+> [English](README.md)
 
 > 一个 [Pi](https://pi.dev) 扩展：追踪你的 **DeepSeek 用量与费用** —— 状态栏实时显示会话累计费用，`/ds-cost` 与 `/ds-estimate` 浮动弹窗，中英双语（货币随语言切换），可选峰谷计价支持。
 
