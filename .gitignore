@@ -4,3 +4,7 @@ dist
 *.tgz
 
 .DS_Store
+# >>> afk init 自动维护：afk 运行时产物忽略 + config.json 入库 <<<
+.pi/afk/*
+!.pi/afk/config.json
+# <<< afk end >>>

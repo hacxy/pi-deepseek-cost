@@ -1,0 +1,22 @@
+{
+  "model": "deepseek/deepseek-v4-flash",
+  "thinking": "medium",
+  "maxParallel": 2,
+  "todoLabel": "agent:todo",
+  "doneLabel": "agent:done",
+  "failedLabel": "agent:failed",
+  "branchPrefix": "afk",
+  "baseBranch": "main",
+  "worktreesDir": ".pi/afk/worktrees",
+  "failedDir": ".pi/afk/failed",
+  "logsDir": ".pi/afk/logs",
+  "sessionsDir": ".pi/afk/sessions",
+  "idleTimeoutSec": 600,
+  "completionTimeoutSec": 60,
+  "autoMerge": true,
+  "mergedLabel": "agent:merged",
+  "maxReviewRounds": 2,
+  "conflictTries": 2,
+  "waitForChecks": true,
+  "mergeTimeoutSec": 600
+}
