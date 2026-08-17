@@ -8,8 +8,8 @@
  *
  * Each model carries both official CNY rates and the USD rates printed on the
  * DeepSeek pricing page. Since 2026-08-17 DeepSeek bills peak/off-peak (peak =
- * 2 × off-peak; peak hours are Beijing 09:00–12:00 and 14:00–18:00), each
- * model stores both rate sets. Cost is computed per entry against its own
+ * 2 × off-peak; peak hours are 01:00–04:00 and 06:00–10:00 UTC, i.e. Beijing
+ * 09:00–12:00 and 14:00–18:00), each model stores both rate sets. Cost is computed per entry against its own
  * timestamp, so the peak/off-peak period at the moment each message happened
  * applies, identically for both currencies.
  */
@@ -22,7 +22,7 @@ import { isPeakHour } from './config'
 // Official pricing
 // CNY + USD: https://api-docs.deepseek.com/zh-cn/quick_start/pricing
 // (off-peak prices as printed on the page; peak = 2 × off-peak, official
-// hours: Beijing 09:00–12:00 and 14:00–18:00)
+// hours: 01:00–04:00 and 06:00–10:00 UTC = Beijing 09:00–12:00 and 14:00–18:00)
 // ---------------------------------------------------------------------------
 
 export interface ModelRate {

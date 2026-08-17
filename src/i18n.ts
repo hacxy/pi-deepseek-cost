@@ -97,7 +97,7 @@ const en: Messages = {
   sessionTotal: 'Session Total',
   crossRef: 'CNY (official)',
   noKnownRate: 'No known rate (not a DeepSeek model?)',
-  peakNote: 'Official peak pricing: ×2 (Beijing 9-12 / 14-18)',
+  peakNote: 'Official peak pricing: ×2 (UTC 01-04 / 06-10)',
 
   escClose: 'Esc to close',
   langToggleHint: 'toggle language',

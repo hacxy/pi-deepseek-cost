@@ -31,7 +31,9 @@ describe('getMessages', () => {
     expect(zh.peakPeriod(2)).toBe('高峰时段 (×2)')
     expect(en.peakPeriod(2)).toBe('Peak (×2)')
     expect(zh.peakNote).toContain('高峰 ×2')
-    expect(en.peakNote).toContain('Beijing 9-12')
+    // zh keeps Beijing-time wording; en uses the official UTC window.
+    expect(zh.peakNote).toContain('北京 9-12')
+    expect(en.peakNote).toContain('UTC 01-04 / 06-10')
     expect(zh.langSwitched('zh')).toBe('已切换为中文')
     expect(en.langSwitched('en')).toBe('Switched to English')
   })
