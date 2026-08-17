@@ -13,10 +13,10 @@
  *   }
  *
  * Peak/off-peak pricing is NOT configurable: since 2026-08-17 DeepSeek bills
- * peak ×2 during Beijing 09:00–12:00 and 14:00–18:00 (off-peak is exactly
- * half of peak). The official rates are baked into pricing.ts. Legacy
- * `peakPricing` / `peakMultiplier` / `peakHours` keys in settings.json are
- * silently ignored.
+ * peak ×2 during the official UTC peak windows 01:00–04:00 and 06:00–10:00
+ * (= Beijing 09:00–12:00 and 14:00–18:00; off-peak is exactly half of peak).
+ * The official rates are baked into pricing.ts. Legacy `peakPricing` /
+ * `peakMultiplier` / `peakHours` keys in settings.json are silently ignored.
  */
 
 import type { Locale } from './i18n'
@@ -34,10 +34,14 @@ export interface DeepseekCostConfig {
 /** Official peak-hour price multiplier (DeepSeek: peak = 2 × off-peak). */
 export const PEAK_MULTIPLIER = 2
 
-/** Official peak-hour ranges, Asia/Shanghai time, [start, end) inclusive-start. */
-export const PEAK_HOURS: [number, number][] = [
-  [9, 12],
-  [14, 18],
+/**
+ * Official peak-hour ranges in UTC, half-open [start, end), verbatim from the
+ * official English pricing page — "Peak Hours: 01:00-04:00 and 06:00-10:00
+ * (UTC)" (https://api-docs.deepseek.com/quick_start/pricing).
+ */
+export const PEAK_HOURS_UTC: [number, number][] = [
+  [1, 4],
+  [6, 10],
 ]
 
 const DEFAULT_CONFIG: DeepseekCostConfig = {
@@ -78,15 +82,10 @@ export function loadDeepseekCostConfig(ctx: ExtensionContext): DeepseekCostConfi
   }
 }
 
-/** Asia/Shanghai hour (UTC+8, no DST) of a date. */
-function shanghaiHour(date: Date): number {
-  return (date.getUTCHours() + 8) % 24
-}
-
-/** True when `date` falls inside an official peak-hour range (Beijing time). */
+/** True when `date` falls inside an official peak-hour UTC window. */
 export function isPeakHour(date: Date): boolean {
-  const h = shanghaiHour(date)
-  return PEAK_HOURS.some(([start, end]) => h >= start && h < end)
+  const h = date.getUTCHours()
+  return PEAK_HOURS_UTC.some(([start, end]) => h >= start && h < end)
 }
 
 /**

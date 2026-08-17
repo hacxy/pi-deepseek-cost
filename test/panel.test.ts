@@ -66,7 +66,7 @@ describe('buildCostPanelLines', () => {
         'assistant',
         'deepseek-v4-flash',
         { input: 1000, output: 300 },
-        '2025-01-01T02:00:00.000Z', // Beijing 10:00 → peak
+        '2025-01-01T02:00:00.000Z', // UTC 02:00 → peak
       ),
     ]
     const h = makeHarness(entries)

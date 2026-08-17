@@ -125,14 +125,14 @@ describe('computeSessionTotals', () => {
   it('applies official peak rates to peak-hour messages only', () => {
     env()
     const entries = [
-      // Beijing 10:00 (UTC 02:00) → peak
+      // UTC 02:00 → peak (= Beijing 10:00)
       usageEntry(
         'assistant',
         'deepseek-v4-flash',
         { input: 1000, output: 300 },
         '2025-01-01T02:00:00.000Z',
       ),
-      // Beijing 13:00 (UTC 05:00) → off-peak
+      // UTC 05:00 → off-peak (= Beijing 13:00)
       usageEntry(
         'assistant',
         'deepseek-v4-flash',
