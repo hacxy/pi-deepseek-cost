@@ -19,7 +19,7 @@
 - **`/ds-cost`**: floating overlay panel — per-model token usage (cache-hit / cache-miss input, output), cache hit rate, CNY/USD cost breakdown, peak-hour split, USD↔CNY cross-reference
 - **Model-aware**: active only for DeepSeek models (`provider: "deepseek"` or id starting with `deepseek`); invisible otherwise
 - **Bilingual + currency**: zh → ¥ (CNY), en → $ (USD). Switch inside the panel with `L`, or globally with `Ctrl+Shift+L`
-- **Official peak/off-peak pricing**: intrinsic — each message is charged at the peak (×2) or off-peak rate of its own timestamp (Beijing 09:00–12:00 & 14:00–18:00)
+- **Official peak/off-peak pricing**: intrinsic — each message is charged at the peak (×2) or off-peak rate of its own timestamp (UTC 01:00–04:00 & 06:00–10:00)
 
 ## Installation
 
@@ -66,11 +66,11 @@ In `~/.pi/agent/settings.json` (global) or `.pi/settings.json` (project, overrid
 
 Config edits take effect immediately (re-read on every calculation).
 
-> Peak/off-peak pricing is **not** configurable: DeepSeek bills peak ×2 during Beijing 09:00–12:00 and 14:00–18:00 (off-peak is exactly half of peak). Legacy `peakPricing` / `peakMultiplier` / `peakHours` keys in settings.json are silently ignored and can be removed.
+> Peak/off-peak pricing is **not** configurable: DeepSeek bills peak ×2 during 01:00–04:00 and 06:00–10:00 UTC (off-peak is exactly half of peak). Legacy `peakPricing` / `peakMultiplier` / `peakHours` keys in settings.json are silently ignored and can be removed.
 
 ### Peak pricing details
 
-Peak/off-peak pricing is official and always in effect. Each message is charged against **its own timestamp**: peak-hour messages at the peak rate (×2), off-peak at the off-peak rate — mixed sessions split precisely (the `/ds-cost` panel always shows off-peak / peak rows). Time is always evaluated in Asia/Shanghai (UTC+8, no DST), matching DeepSeek's official definition (09:00–12:00 and 14:00–18:00 Beijing time).
+Peak/off-peak pricing is official and always in effect. Each message is charged against **its own timestamp**: peak-hour messages at the peak rate (×2), off-peak at the off-peak rate — mixed sessions split precisely (the `/ds-cost` panel always shows off-peak / peak rows). Time is always evaluated in UTC, matching DeepSeek's official definition (01:00–04:00 and 06:00–10:00 UTC, i.e. Beijing 09:00–12:00 and 14:00–18:00).
 
 ## Cost basis
 
