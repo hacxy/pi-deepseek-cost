@@ -71,17 +71,26 @@ describe('peak hour helpers', () => {
     expect(PEAK_MULTIPLIER).toBe(2)
   })
 
-  it('isPeakHour checks Asia/Shanghai time (UTC+8) against official hours', () => {
-    // Beijing 10:00 = UTC 02:00 → peak
+  it('isPeakHour checks UTC hours directly against official windows', () => {
+    // UTC 02:00 → peak (window [1,4))
     expect(isPeakHour(new Date('2025-01-01T02:00:00Z'))).toBe(true)
-    // Beijing 12:00 = UTC 04:00 → off-peak (half-open [9,12))
+    // UTC 04:00 → off-peak (half-open [1,4))
     expect(isPeakHour(new Date('2025-01-01T04:00:00Z'))).toBe(false)
-    // Beijing 15:00 = UTC 07:00 → peak
+    // UTC 07:00 → peak (window [6,10))
     expect(isPeakHour(new Date('2025-01-01T07:00:00Z'))).toBe(true)
-    // Beijing 18:00 = UTC 10:00 → off-peak
+    // UTC 10:00 → off-peak (half-open [6,10))
     expect(isPeakHour(new Date('2025-01-01T10:00:00Z'))).toBe(false)
-    // Beijing 08:00 = UTC 00:00 → off-peak
+    // UTC 00:00 → off-peak
     expect(isPeakHour(new Date('2025-01-01T00:00:00Z'))).toBe(false)
+  })
+
+  it('treats window boundaries as half-open [start, end)', () => {
+    // Window starts are peak: UTC 01:00 (start of [1,4)) and 06:00 (start of [6,10))
+    expect(isPeakHour(new Date('2025-01-01T01:00:00Z'))).toBe(true)
+    expect(isPeakHour(new Date('2025-01-01T06:00:00Z'))).toBe(true)
+    // Window ends are off-peak: UTC 04:00 (end of [1,4)) and 10:00 (end of [6,10))
+    expect(isPeakHour(new Date('2025-01-01T04:00:00Z'))).toBe(false)
+    expect(isPeakHour(new Date('2025-01-01T10:00:00Z'))).toBe(false)
   })
 })
 
