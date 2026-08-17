@@ -17,7 +17,7 @@
 
 - **Status bar**: live cumulative cost for the current session (`¥0.019`), refreshed after every turn — cost only, no noise (an empty session shows `¥0`)
 - **`/ds-cost`**: floating overlay panel — per-model token usage (cache-hit / cache-miss input, output), cache hit rate, CNY/USD cost breakdown, peak-hour split, USD↔CNY cross-reference
-- **Model-aware**: active only for DeepSeek models (`provider: "deepseek"` or id starting with `deepseek`); invisible otherwise
+- **Model-aware**: active only when the model runs on the **native DeepSeek provider** (`provider: "deepseek"` — i.e. billed by DeepSeek itself); DeepSeek models served through other providers or gateways (OpenRouter, OpenAI-compatible proxies, …) keep the extension invisible, since only official DeepSeek billing can be priced here
 - **Bilingual + currency**: zh → ¥ (CNY), en → $ (USD). Switch inside the panel with `L`, or globally with `Ctrl+Shift+L`
 - **Official peak/off-peak pricing**: intrinsic — each message is charged at the peak (×2) or off-peak rate of its own timestamp (UTC 01:00–04:00 & 06:00–10:00)
 

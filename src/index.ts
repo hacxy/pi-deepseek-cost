@@ -7,8 +7,11 @@
  *  - `/ds-cost` — floating overlay with per-model token usage, CNY breakdown
  *    (peak-aware), USD cross-check.
  *
- * Only active for DeepSeek models (provider `deepseek` or id starting with
- * `deepseek`); with any other model the extension is fully invisible.
+ * Only active when the model runs on the native DeepSeek provider (`provider`
+ * === `deepseek`, i.e. billed by DeepSeek itself). DeepSeek models served by
+ * any other provider or gateway (e.g. OpenRouter, OpenAI-compatible proxies)
+ * keep the extension fully invisible: only DeepSeek's official billing can be
+ * priced by this extension.
  *
  * Peak/off-peak pricing is official and intrinsic (see pricing.ts); only the
  * UI language is configurable via the `deepseekCost` section of settings.json
@@ -28,11 +31,11 @@ import { computeSessionTotals, sessionCostCny, sessionCostUsd } from './pricing'
 // Model detection
 // ---------------------------------------------------------------------------
 
-/** True when the active model belongs to DeepSeek (provider or id). */
+/** True when the active model runs on the native DeepSeek provider. */
 function isDeepSeekModel(ctx: ExtensionContext): boolean {
   const model = ctx.model
   if (!model) return false
-  return model.provider === 'deepseek' || model.id.startsWith('deepseek')
+  return model.provider === 'deepseek'
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +118,7 @@ export default function (pi: ExtensionAPI) {
     handler: async (_args, ctx) => {
       const m = getMessages(loadDeepseekCostConfig(ctx).locale)
       if (!isDeepSeekModel(ctx)) {
-        ctx.ui.notify(m.notDeepSeek, 'info')
+        ctx.ui.notify(m.notNativeDeepSeek(ctx.model?.provider ?? 'unknown'), 'info')
         return
       }
       if (ctx.mode !== 'tui') {

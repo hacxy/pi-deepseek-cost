@@ -36,7 +36,8 @@ export interface Messages {
   /** Short hint shown in panels: "L <hint>". */
   langToggleHint: string
 
-  notDeepSeek: string
+  /** Rejection when the active provider is not native DeepSeek. */
+  notNativeDeepSeek: (provider: string) => string
   costRequiresTui: string
   langSwitched: (locale: Locale) => string
   langWriteFailed: string
@@ -69,7 +70,7 @@ const zh: Messages = {
   escClose: 'Esc 关闭',
   langToggleHint: '切换语言',
 
-  notDeepSeek: 'deepseek-cost: 当前模型不是 DeepSeek',
+  notNativeDeepSeek: (provider) => `deepseek-cost: 仅 DeepSeek 原生供应商启用（当前: ${provider}）`,
   costRequiresTui: 'cost requires interactive mode',
   langSwitched: (locale) => (locale === 'zh' ? '已切换为中文' : 'Switched to English'),
   langWriteFailed: '写入 settings.json 失败',
@@ -102,7 +103,8 @@ const en: Messages = {
   escClose: 'Esc to close',
   langToggleHint: 'toggle language',
 
-  notDeepSeek: 'deepseek-cost: current model is not DeepSeek',
+  notNativeDeepSeek: (provider) =>
+    `deepseek-cost: enabled only for the native DeepSeek provider (current: ${provider})`,
   costRequiresTui: 'cost requires interactive mode',
   langSwitched: (locale) => (locale === 'zh' ? '已切换为中文' : 'Switched to English'),
   langWriteFailed: 'failed to write settings.json',

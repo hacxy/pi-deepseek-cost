@@ -62,6 +62,33 @@ describe('status bar (updateStatus)', () => {
     expect(h.statuses.at(-1)).toBeUndefined()
   })
 
+  it('keeps DeepSeek models on other providers invisible (id prefix alone is not enough)', async () => {
+    env()
+    const h = makeHarness([])
+    // OpenRouter-style id that merely starts with "deepseek/…"
+    h.ctx.model = {
+      id: 'deepseek/deepseek-chat',
+      provider: 'openrouter',
+    } as unknown as typeof h.ctx.model
+    await h.handlers.session_start![0]!({}, h.ctx)
+    expect(h.statuses.at(-1)).toBeUndefined()
+    // User's real scenario: opencode gateway serving a DeepSeek-named model
+    h.ctx.model = { id: 'deepseek-v4-flash', provider: 'opencode' } as unknown as typeof h.ctx.model
+    await h.handlers.session_start![0]!({}, h.ctx)
+    expect(h.statuses.at(-1)).toBeUndefined()
+  })
+
+  it('activates for any model id on the native deepseek provider (unknown ids included)', async () => {
+    env()
+    const h = makeHarness([])
+    h.ctx.model = {
+      id: 'deepseek-future-gen',
+      provider: 'deepseek',
+    } as unknown as typeof h.ctx.model
+    await h.handlers.session_start![0]!({}, h.ctx)
+    expect(h.statuses.at(-1)).toBe('¥0')
+  })
+
   it('shows USD for en locale', async () => {
     env({ deepseekCost: { locale: 'en' } })
     const h = makeHarness([
@@ -84,12 +111,13 @@ describe('status bar (updateStatus)', () => {
 })
 
 describe('command guards', () => {
-  it('rejects ds-cost when the model is not DeepSeek', async () => {
+  it('rejects ds-cost when the provider is not native DeepSeek, naming the current provider', async () => {
     env()
     const h = makeHarness([])
-    h.ctx.model = { id: 'gpt-4o', provider: 'openai' } as unknown as typeof h.ctx.model
+    h.ctx.model = { id: 'deepseek-v4-flash', provider: 'opencode' } as unknown as typeof h.ctx.model
     await h.commands['ds-cost']!.handler('', h.ctx)
-    expect(h.notifies.at(-1)?.msg).toContain('不是 DeepSeek')
+    expect(h.notifies.at(-1)?.msg).toContain('原生供应商')
+    expect(h.notifies.at(-1)?.msg).toContain('opencode')
   })
 })
 
