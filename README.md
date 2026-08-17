@@ -5,7 +5,7 @@
 
 > [简体中文](README_ZH.md)
 
-> A [Pi](https://pi.dev) extension that tracks your **DeepSeek usage & cost** — live session cost in the status bar, `/ds-cost` and `/ds-estimate` overlay panels, bilingual UI (中文/English) with currency switching, and optional peak/off-peak pricing.
+> A [Pi](https://pi.dev) extension that tracks your **DeepSeek usage & cost** — live session cost in the status bar, a `/ds-cost` overlay panel, bilingual UI (中文/English) with currency switching, and official peak/off-peak billing.
 
 ## Screenshots
 
@@ -17,10 +17,9 @@
 
 - **Status bar**: live cumulative cost for the current session (`¥0.019`), refreshed after every turn — cost only, no noise (an empty session shows `¥0`)
 - **`/ds-cost`**: floating overlay panel — per-model token usage (cache-hit / cache-miss input, output), cache hit rate, CNY/USD cost breakdown, peak-hour split, USD↔CNY cross-reference
-- **`/ds-estimate <text>`**: offline token count & input-cost estimate using the **official DeepSeek tokenizer** (ported to TypeScript, no Python)
 - **Model-aware**: active only for DeepSeek models (`provider: "deepseek"` or id starting with `deepseek`); invisible otherwise
-- **Bilingual + currency**: zh → ¥ (CNY), en → $ (USD). Switch inside either panel with `L`, or globally with `Ctrl+Shift+L`
-- **Peak/off-peak pricing**: opt-in via settings, per-message timestamp evaluation (Beijing time), configurable hours/multiplier
+- **Bilingual + currency**: zh → ¥ (CNY), en → $ (USD). Switch inside the panel with `L`, or globally with `Ctrl+Shift+L`
+- **Official peak/off-peak pricing**: intrinsic — each message is charged at the peak (×2) or off-peak rate of its own timestamp (Beijing 09:00–12:00 & 14:00–18:00)
 
 ## Installation
 
@@ -46,7 +45,6 @@ Requires:
 | ----------------------- | ---------------------------------------------------------------------- |
 | View session cost       | Watch the status bar (updates after each turn)                         |
 | Detailed cost panel     | `/ds-cost` (Esc to close, `L` to switch language)                      |
-| Estimate token/cost     | `/ds-estimate <text>`                                                  |
 | Switch language (zh↔en) | `L` inside a panel, or `Ctrl+Shift+L` (rebindable in keybindings.json) |
 | Set language in config  | `deepseekCost.locale` in settings.json                                 |
 
@@ -57,50 +55,39 @@ In `~/.pi/agent/settings.json` (global) or `.pi/settings.json` (project, overrid
 ```json
 {
   "deepseekCost": {
-    "locale": "zh",
-    "peakPricing": false,
-    "peakMultiplier": 2,
-    "peakHours": [
-      [9, 12],
-      [14, 18]
-    ]
+    "locale": "zh"
   }
 }
 ```
 
-| Key              | Default            | Description                                                                  |
-| ---------------- | ------------------ | ---------------------------------------------------------------------------- |
-| `locale`         | `"zh"`             | UI language: `"zh"` or `"en"`. Currency follows (zh → ¥, en → $)             |
-| `peakPricing`    | `false`            | Apply the peak multiplier during peak hours (official peak/off-peak pricing) |
-| `peakMultiplier` | `2`                | Price multiplier during peak hours (official: 2×)                            |
-| `peakHours`      | `[[9,12],[14,18]]` | Peak hour ranges, **Asia/Shanghai (Beijing) time**, `[start, end)`           |
+| Key      | Default | Description                                                      |
+| -------- | ------- | ---------------------------------------------------------------- |
+| `locale` | `"zh"`  | UI language: `"zh"` or `"en"`. Currency follows (zh → ¥, en → $) |
 
 Config edits take effect immediately (re-read on every calculation).
 
+> Peak/off-peak pricing is **not** configurable: DeepSeek bills peak ×2 during Beijing 09:00–12:00 and 14:00–18:00 (off-peak is exactly half of peak). Legacy `peakPricing` / `peakMultiplier` / `peakHours` keys in settings.json are silently ignored and can be removed.
+
 ### Peak pricing details
 
-When `peakPricing: true`, each message is charged against **its own timestamp**: peak-hour requests at ×`peakMultiplier`, off-peak at ×1 — mixed sessions split precisely (the `/ds-cost` panel shows off-peak / peak rows). `/ds-estimate` applies the current period's multiplier. Time is always evaluated in Asia/Shanghai (UTC+8, no DST), matching DeepSeek's official definition (09:00–12:00 and 14:00–18:00 Beijing time).
+Peak/off-peak pricing is official and always in effect. Each message is charged against **its own timestamp**: peak-hour messages at the peak rate (×2), off-peak at the off-peak rate — mixed sessions split precisely (the `/ds-cost` panel always shows off-peak / peak rows). Time is always evaluated in Asia/Shanghai (UTC+8, no DST), matching DeepSeek's official definition (09:00–12:00 and 14:00–18:00 Beijing time).
 
 ## Cost basis
 
 - Token numbers come from the real `usage` blocks Pi persists on messages (`input` = cache-miss input, `cacheRead` = cache-hit input, `output`), matching DeepSeek API's `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens` / `completion_tokens`
-- CNY uses DeepSeek official per-million-token prices; USD uses the USD rates from Pi's built-in DeepSeek model config (same source values), so the USD display matches the rest of the Pi UI
+- CNY and USD both use DeepSeek's official per-million-token prices as printed on the [pricing page](https://api-docs.deepseek.com/quick_start/pricing) (≈¥6.9/$). Off-peak is exactly half of peak.
 
-| Model               | Currency | Input · cache miss | Input · cache hit | Output    |
-| ------------------- | -------- | ------------------ | ----------------- | --------- |
-| `deepseek-v4-flash` | ¥ CNY    | ¥1 / M             | ¥0.02 / M         | ¥2 / M    |
-|                     | $ USD    | $0.14 / M          | $0.0028 / M       | $0.28 / M |
-| `deepseek-v4-pro`   | ¥ CNY    | ¥3 / M             | ¥0.025 / M        | ¥6 / M    |
-|                     | $ USD    | $0.435 / M         | $0.003625 / M     | $0.87 / M |
+| Model               | Period   | Input · cache miss | Input · cache hit  | Output            |
+| ------------------- | -------- | ------------------ | ------------------ | ----------------- |
+| `deepseek-v4-flash` | Off-peak | ¥1.5 / M ($0.22)   | ¥0.05 / M ($0.007) | ¥4.5 / M ($0.66)  |
+|                     | Peak ×2  | ¥3 / M ($0.44)     | ¥0.10 / M ($0.014) | ¥9 / M ($1.32)    |
+| `deepseek-v4-pro`   | Off-peak | ¥4.5 / M ($0.66)   | ¥0.15 / M ($0.022) | ¥13.5 / M ($1.98) |
+|                     | Peak ×2  | ¥9 / M ($1.32)     | ¥0.30 / M ($0.044) | ¥27 / M ($3.96)   |
+
+> `deepseek-chat` / `deepseek-reasoner` are deprecated (since 2026-07-24) and priced at the V4 Flash rates — kept so older persisted sessions still show correct costs.
 
 - Cost is computed per model (model switches mid-session aggregate correctly); `toolResult` / compaction usage uses the last known model
 - Session totals rebuild from the session file, so they stay accurate after `/resume`
-
-## Tokenizer
-
-`src/tokenizer.ts` is a pure-TypeScript port of the official `deepseek_tokenizer.zip` (LlamaTokenizerFast / byte-level BPE) — no Python, no runtime npm dependencies. Token-level identical to HuggingFace's Rust `tokenizers` (cross-validated, including Chinese, emoji, code, and 20k-char documents).
-
-> The official zip ships the **V3** tokenizer; estimates may differ slightly for V4 models. Actual billing follows the API's returned `usage`.
 
 ## Development
 

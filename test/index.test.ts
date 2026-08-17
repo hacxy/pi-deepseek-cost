@@ -30,11 +30,11 @@ describe('event wiring', () => {
     }
   })
 
-  it('registers ds-cost and ds-estimate commands, no ds-lang', () => {
+  it('registers ds-cost command, no ds-estimate/ds-lang', () => {
     env()
     const h = makeHarness([])
     expect(h.commands['ds-cost']).toBeDefined()
-    expect(h.commands['ds-estimate']).toBeDefined()
+    expect(h.commands['ds-estimate']).toBeUndefined()
     expect(h.commands['ds-lang']).toBeUndefined()
     expect(h.shortcuts['ctrl+shift+l']).toBeDefined()
   })
@@ -51,7 +51,7 @@ describe('status bar (updateStatus)', () => {
       }),
     ])
     await h.handlers.session_start![0]!({}, h.ctx)
-    expect(h.statuses.at(-1)).toContain('¥0.0016')
+    expect(h.statuses.at(-1)).toContain('¥0.0029')
   })
 
   it('clears the status for non-DeepSeek models', async () => {
@@ -72,7 +72,7 @@ describe('status bar (updateStatus)', () => {
       }),
     ])
     await h.handlers.session_start![0]!({}, h.ctx)
-    expect(h.statuses.at(-1)).toContain('$0.0002')
+    expect(h.statuses.at(-1)).toContain('$0.0004')
   })
 
   it('shows ¥0 for an empty session', async () => {
@@ -90,21 +90,6 @@ describe('command guards', () => {
     h.ctx.model = { id: 'gpt-4o', provider: 'openai' } as unknown as typeof h.ctx.model
     await h.commands['ds-cost']!.handler('', h.ctx)
     expect(h.notifies.at(-1)?.msg).toContain('不是 DeepSeek')
-  })
-
-  it('rejects ds-estimate when the model is not DeepSeek', async () => {
-    env()
-    const h = makeHarness([])
-    h.ctx.model = { id: 'gpt-4o', provider: 'openai' } as unknown as typeof h.ctx.model
-    await h.commands['ds-estimate']!.handler('hello', h.ctx)
-    expect(h.notifies.at(-1)?.msg).toContain('不是 DeepSeek')
-  })
-
-  it('rejects empty ds-estimate input', async () => {
-    env()
-    const h = makeHarness([])
-    await h.commands['ds-estimate']!.handler('  ', h.ctx)
-    expect(h.notifies.at(-1)?.msg).toContain('Usage')
   })
 })
 

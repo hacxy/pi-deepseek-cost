@@ -1,12 +1,11 @@
 /**
- * Overlay UI: the bordered floating dialog and the content builders for the
- * `/ds-cost` and `/ds-estimate` panels. All user-facing strings come from
- * i18n.ts, selected by the configured locale (settings.json
- * `deepseekCost.locale`).
+ * Overlay UI: the bordered floating dialog and the content builder for the
+ * `/ds-cost` panel. All user-facing strings come from i18n.ts, selected by the
+ * configured locale (settings.json `deepseekCost.locale`).
  *
  * The display currency follows the locale: zh → CNY (¥), en → USD ($). Each
- * model's rates carry both currencies (see pricing.ts), and the same peak
- * multiplier applies to both.
+ * model's rates carry both currencies and both peak/off-peak sets (see
+ * pricing.ts). Peak pricing is official and always in effect.
  */
 
 import type { Messages } from './i18n'
@@ -14,14 +13,13 @@ import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent'
 
 import { matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
 
-import { isPeakHour, loadDeepseekCostConfig, peakMultiplierFor } from './config'
+import { isPeakHour, loadDeepseekCostConfig, PEAK_MULTIPLIER } from './config'
 import {
   formatCny,
   formatShortTokens,
   formatTokens,
   formatUsd,
   PANEL_CONTENT_W,
-  PANEL_VALUE_W,
   row,
 } from './format'
 import { getMessages } from './i18n'
@@ -107,15 +105,10 @@ function modelLine(
   return `  ${theme.fg('muted', m.model)} ${modelId ?? '?'}${rateName ? ` (${rateName})` : ''}`
 }
 
-/** Peak/off-peak status line for the current time, or null when disabled. */
-function peakStateLine(
-  m: Messages,
-  theme: Theme,
-  config: ReturnType<typeof loadDeepseekCostConfig>,
-): string | null {
-  if (!config.peakPricing) return null
-  const isPeak = isPeakHour(new Date(), config)
-  const label = isPeak ? m.peakState(config.peakMultiplier) : m.offpeakState
+/** Peak/off-peak status line for the current time (official, always shown). */
+function peakStateLine(m: Messages, theme: Theme): string {
+  const isPeak = isPeakHour(new Date())
+  const label = isPeak ? m.peakState(PEAK_MULTIPLIER) : m.offpeakState
   return `  ${theme.fg('muted', m.period)} ${theme.fg(isPeak ? 'warning' : 'dim', label)}`
 }
 
@@ -171,8 +164,7 @@ export function buildCostPanelLines(ctx: ExtensionContext, theme: Theme): string
 
   const lines: string[] = []
   lines.push(modelLine(m, theme, currentModelId, currentRate?.name))
-  const peakLine = peakStateLine(m, theme, config)
-  if (peakLine !== null) lines.push(peakLine)
+  lines.push(peakStateLine(m, theme))
   lines.push(separator(theme))
 
   lines.push('')
@@ -242,18 +234,13 @@ export function buildCostPanelLines(ctx: ExtensionContext, theme: Theme): string
         }
       }
     }
-    // Peak/off-peak split (only meaningful when peak pricing is enabled).
-    if (config.peakPricing) {
-      const offpeak = config.locale === 'zh' ? g.cny.offpeak : g.usd.offpeak
-      const peak = config.locale === 'zh' ? g.cny.peak : g.usd.peak
-      lines.push(row(theme.fg('dim', m.offpeakPeriod), theme.fg('muted', money.fmt(offpeak))))
-      lines.push(
-        row(
-          theme.fg('dim', m.peakPeriod(config.peakMultiplier)),
-          theme.fg('warning', money.fmt(peak)),
-        ),
-      )
-    }
+    // Peak/off-peak split (official peak pricing, always shown).
+    const offpeak = config.locale === 'zh' ? g.cny.offpeak : g.usd.offpeak
+    const peak = config.locale === 'zh' ? g.cny.peak : g.usd.peak
+    lines.push(row(theme.fg('dim', m.offpeakPeriod), theme.fg('muted', money.fmt(offpeak))))
+    lines.push(
+      row(theme.fg('dim', m.peakPeriod(PEAK_MULTIPLIER)), theme.fg('warning', money.fmt(peak))),
+    )
     lines.push(separator(theme))
     lines.push(
       row(
@@ -270,75 +257,10 @@ export function buildCostPanelLines(ctx: ExtensionContext, theme: Theme): string
   }
 
   lines.push('')
-  if (config.peakPricing) {
-    const hours = config.peakHours.map(([s, e]) => `${s}-${e}`).join(' / ')
-    lines.push(`  ${theme.fg('dim', m.peakEnabled(config.peakMultiplier, hours))}`)
-  } else {
-    lines.push(`  ${theme.fg('dim', m.peakDisabled)}`)
-  }
+  lines.push(`  ${theme.fg('dim', m.peakNote)}`)
   lines.push(`  ${theme.fg('dim', `L ${m.langToggleHint} · ${m.escClose}`)}`)
   return lines
 }
 
-/** Result of an offline token estimate (from tokenizer.ts). */
-export interface EstimateResult {
-  text: string
-  tokens: number
-  unencodable: number
-}
-
-/** Build the `/ds-estimate` panel content lines. */
-export function buildEstimatePanelLines(
-  ctx: ExtensionContext,
-  theme: Theme,
-  estimate: EstimateResult,
-): string[] {
-  const { text, tokens, unencodable } = estimate
-  const modelId = ctx.model?.id ?? 'unknown'
-  const rate = DEEPSEEK_RATES[modelId]
-  const config = loadDeepseekCostConfig(ctx)
-  const m = getMessages(config.locale)
-  const money = moneyFor(config.locale === 'zh')
-  const nowMultiplier = peakMultiplierFor(new Date(), config)
-
-  const out: string[] = []
-  out.push(modelLine(m, theme, modelId, rate?.name))
-  const peakLine = peakStateLine(m, theme, config)
-  if (peakLine !== null) out.push(peakLine)
-  out.push(separator(theme))
-  out.push('')
-  out.push(row(theme.fg('muted', m.textLength), `${formatTokens([...text].length)} 字符`))
-  out.push(row(theme.fg('muted', m.tokenCount), theme.bold(formatTokens(tokens))))
-  if (unencodable > 0) {
-    out.push(`  ${theme.fg('warning', m.unencodable(unencodable))}`)
-  }
-  if (rate) {
-    out.push('')
-    out.push(`  ${theme.fg('muted', theme.bold(m.inputCostSection))}`)
-    const miss = ((tokens * money.in(rate)) / 1_000_000) * nowMultiplier
-    const hit = ((tokens * money.read(rate)) / 1_000_000) * nowMultiplier
-    out.push(
-      row(
-        theme.fg('dim', m.cacheMiss),
-        `${money.fmt(miss)}  ${theme.fg('dim', `(${money.fmt(money.in(rate))}/M${nowMultiplier > 1 ? ` ×${nowMultiplier}` : ''})`)}`,
-      ),
-    )
-    out.push(
-      row(
-        theme.fg('dim', m.cacheHit),
-        `${money.fmt(hit)}  ${theme.fg('dim', `(${money.fmt(money.read(rate))}/M${nowMultiplier > 1 ? ` ×${nowMultiplier}` : ''})`)}`,
-      ),
-    )
-  } else {
-    out.push('')
-    out.push(`  ${theme.fg('warning', m.noRate)}`)
-  }
-  out.push('')
-  out.push(`  ${theme.fg('dim', m.estimateNote)}`)
-  out.push(`  ${theme.fg('dim', `L ${m.langToggleHint} · ${m.escClose}`)}`)
-  return out
-}
-
-// PANEL_VALUE_W is referenced here only to keep the import graph obvious;
-// actual usage lives in format.ts `row`. This re-export keeps panel imports tidy.
-export { PANEL_VALUE_W }
+// PANEL_VALUE_W is exported from format.ts; panel content rows use it via
+// `row` (see format.ts).

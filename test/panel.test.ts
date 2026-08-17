@@ -1,12 +1,12 @@
 /**
- * Panel tests: content builders (zh/en currency, peak rows, estimate), and
+ * Panel tests: content builder (zh/en currency, official peak rows), and
  * the OverlayPanel component (L key, escape, wrapping, border alignment).
  */
 
 import { visibleWidth } from '@earendil-works/pi-tui'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { buildCostPanelLines, buildEstimatePanelLines, OverlayPanel } from '../src/panel'
+import { buildCostPanelLines, OverlayPanel } from '../src/panel'
 import { createSettingsEnv, makeHarness, mockTheme, usageEntry } from './helpers'
 
 const restores: Array<() => void> = []
@@ -38,10 +38,10 @@ describe('buildCostPanelLines', () => {
     expect(lines.join('\n')).toContain('Token 用量')
     expect(lines.join('\n')).toContain('输入 · 缓存命中')
     expect(lines.join('\n')).toContain('1,800')
-    // CNY: (1000*1 + 500*0.02 + 300*2)/1e6 = 0.00161
-    expect(lines.join('\n')).toContain('¥0.0016')
-    // USD cross-ref: 0.0002254
-    expect(lines.join('\n')).toContain('$0.0002')
+    // CNY off-peak: (1000*1.5 + 500*0.05 + 300*4.5)/1e6 = 0.002875
+    expect(lines.join('\n')).toContain('¥0.0029')
+    // USD cross-ref: 0.0004215
+    expect(lines.join('\n')).toContain('$0.0004')
     expect(lines.join('\n')).toContain('L 切换语言 · Esc 关闭')
   })
 
@@ -52,21 +52,15 @@ describe('buildCostPanelLines', () => {
 
     expect(lines).toContain('Cost (official, USD)')
     expect(lines).toContain('Session Total')
-    expect(lines).toContain('$0.0002')
+    expect(lines).toContain('$0.0004')
     expect(lines).toContain('CNY (official)')
-    expect(lines).toContain('¥0.0016')
+    expect(lines).toContain('¥0.0029')
     expect(lines).toContain('L toggle language · Esc to close')
     expect(lines).not.toContain('合计')
   })
 
-  it('shows peak/off-peak split when peak pricing is enabled', () => {
-    env({
-      deepseekCost: {
-        locale: 'zh',
-        peakPricing: true,
-        peakMultiplier: 2,
-      },
-    })
+  it('always shows the peak/off-peak split (official pricing)', () => {
+    env({ deepseekCost: { locale: 'zh' } })
     const entries = [
       usageEntry(
         'assistant',
@@ -79,17 +73,19 @@ describe('buildCostPanelLines', () => {
     const lines = buildCostPanelLines(h.ctx, mockTheme()).join('\n')
     expect(lines).toContain('平时时段')
     expect(lines).toContain('高峰时段 (×2)')
-    expect(lines).toContain('¥0.0032') // peak cost
+    expect(lines).toContain('¥0.0057') // (1000*3 + 300*9)/1e6, flash peak
     // Current-period label depends on the real clock; just check it renders.
     expect(lines).toMatch(/时段 (高峰|平时)/)
+    expect(lines).toContain('官方峰谷计价')
   })
 
-  it('hides peak rows when peak pricing is disabled', () => {
-    env({ deepseekCost: { locale: 'zh', peakPricing: false } })
-    const h = makeHarness(FLASH_ENTRY())
+  it('renders a zero-cost off-peak/peak split when peak pricing is intrinsic', () => {
+    env({ deepseekCost: { locale: 'zh' } })
+    const h = makeHarness(FLASH_ENTRY()) // off-peak timestamp → all off-peak
     const lines = buildCostPanelLines(h.ctx, mockTheme()).join('\n')
-    expect(lines).not.toContain('高峰时段')
-    expect(lines).toContain('峰谷计价未启用')
+    expect(lines).toContain('高峰时段 (×2)')
+    expect(lines).toContain('平时时段')
+    expect(lines).toContain('官方峰谷计价')
   })
 
   it('warns when no known rate exists', () => {
@@ -97,32 +93,6 @@ describe('buildCostPanelLines', () => {
     const h = makeHarness([usageEntry('assistant', 'gpt-4o', { input: 100, output: 100 })])
     const lines = buildCostPanelLines(h.ctx, mockTheme()).join('\n')
     expect(lines).toContain('无已知费率')
-  })
-})
-
-describe('buildEstimatePanelLines', () => {
-  it('renders estimate with currency-following rates', () => {
-    env({ deepseekCost: { locale: 'zh' } })
-    const h = makeHarness([])
-    const lines = buildEstimatePanelLines(h.ctx, mockTheme(), {
-      text: 'hello world 你好',
-      tokens: 10,
-      unencodable: 0,
-    }).join('\n')
-    expect(lines).toContain('Token 数')
-    expect(lines).toContain('10')
-    expect(lines).toContain('¥1.00/M')
-  })
-
-  it('reports unencodable symbols', () => {
-    env({ deepseekCost: { locale: 'zh' } })
-    const h = makeHarness([])
-    const lines = buildEstimatePanelLines(h.ctx, mockTheme(), {
-      text: 'x',
-      tokens: 1,
-      unencodable: 2,
-    }).join('\n')
-    expect(lines).toContain('2 个符号无法编码')
   })
 })
 

@@ -6,58 +6,93 @@
  * the DeepSeek API's prompt_cache_hit_tokens / prompt_cache_miss_tokens /
  * completion_tokens fields.
  *
- * Each model carries both official CNY rates and USD rates (the USD values are
- * pi's own model cost config for DeepSeek, so the USD display matches the rest
- * of the pi UI). Cost is computed per entry against its own timestamp, so
- * peak-hour pricing (when enabled, see config.ts) applies to the moment each
- * message happened, identically for both currencies.
+ * Each model carries both official CNY rates and the USD rates printed on the
+ * DeepSeek pricing page. Since 2026-08-17 DeepSeek bills peak/off-peak (peak =
+ * 2 × off-peak; peak hours are Beijing 09:00–12:00 and 14:00–18:00), each
+ * model stores both rate sets. Cost is computed per entry against its own
+ * timestamp, so the peak/off-peak period at the moment each message happened
+ * applies, identically for both currencies.
  */
 
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent'
 
-import { loadDeepseekCostConfig, peakMultiplierFor } from './config'
+import { isPeakHour } from './config'
 
 // ---------------------------------------------------------------------------
 // Official pricing
-// CNY: https://api-docs.deepseek.com/zh-cn/quick_start/pricing
-// USD: pi's built-in deepseek provider cost config (same source values)
+// CNY + USD: https://api-docs.deepseek.com/zh-cn/quick_start/pricing
+// (off-peak prices as printed on the page; peak = 2 × off-peak, official
+// hours: Beijing 09:00–12:00 and 14:00–18:00)
 // ---------------------------------------------------------------------------
 
 export interface ModelRate {
   name: string
-  /** cache-miss input, CNY per 1M tokens */
+  /** cache-miss input, CNY per 1M tokens (off-peak) */
   input: number
-  /** cache-hit input, CNY per 1M tokens */
+  /** cache-hit input, CNY per 1M tokens (off-peak) */
   cacheRead: number
-  /** output, CNY per 1M tokens */
+  /** output, CNY per 1M tokens (off-peak) */
   output: number
-  /** cache-miss input, USD per 1M tokens */
+  /** cache-miss input, USD per 1M tokens (off-peak) */
   usdInput: number
-  /** cache-hit input, USD per 1M tokens */
+  /** cache-hit input, USD per 1M tokens (off-peak) */
   usdCacheRead: number
-  /** output, USD per 1M tokens */
+  /** output, USD per 1M tokens (off-peak) */
   usdOutput: number
+  /** cache-miss input, CNY per 1M tokens (peak = 2 × off-peak) */
+  peakInput: number
+  /** cache-hit input, CNY per 1M tokens (peak) */
+  peakCacheRead: number
+  /** output, CNY per 1M tokens (peak) */
+  peakOutput: number
+  /** cache-miss input, USD per 1M tokens (peak) */
+  peakUsdInput: number
+  /** cache-hit input, USD per 1M tokens (peak) */
+  peakUsdCacheRead: number
+  /** output, USD per 1M tokens (peak) */
+  peakUsdOutput: number
+}
+
+const FLASH_RATE: ModelRate = {
+  name: 'DeepSeek V4 Flash',
+  input: 1.5,
+  cacheRead: 0.05,
+  output: 4.5,
+  usdInput: 0.22,
+  usdCacheRead: 0.007,
+  usdOutput: 0.66,
+  peakInput: 3,
+  peakCacheRead: 0.1,
+  peakOutput: 9,
+  peakUsdInput: 0.44,
+  peakUsdCacheRead: 0.014,
+  peakUsdOutput: 1.32,
+}
+
+const PRO_RATE: ModelRate = {
+  name: 'DeepSeek V4 Pro',
+  input: 4.5,
+  cacheRead: 0.15,
+  output: 13.5,
+  usdInput: 0.66,
+  usdCacheRead: 0.022,
+  usdOutput: 1.98,
+  peakInput: 9,
+  peakCacheRead: 0.3,
+  peakOutput: 27,
+  peakUsdInput: 1.32,
+  peakUsdCacheRead: 0.044,
+  peakUsdOutput: 3.96,
 }
 
 export const DEEPSEEK_RATES: Record<string, ModelRate> = {
-  'deepseek-v4-flash': {
-    name: 'DeepSeek V4 Flash',
-    input: 1,
-    cacheRead: 0.02,
-    output: 2,
-    usdInput: 0.14,
-    usdCacheRead: 0.0028,
-    usdOutput: 0.28,
-  },
-  'deepseek-v4-pro': {
-    name: 'DeepSeek V4 Pro',
-    input: 3,
-    cacheRead: 0.025,
-    output: 6,
-    usdInput: 0.435,
-    usdCacheRead: 0.003625,
-    usdOutput: 0.87,
-  },
+  'deepseek-v4-flash': FLASH_RATE,
+  'deepseek-v4-pro': PRO_RATE,
+  // Deprecated aliases (requests with these ids fail since 2026-07-24), kept
+  // so usage persisted in older sessions still prices correctly. Both map to
+  // the V4 Flash rates (chat = non-thinking, reasoner = thinking).
+  'deepseek-chat': FLASH_RATE,
+  'deepseek-reasoner': FLASH_RATE,
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +150,6 @@ function addUsage(totals: ModelTotals, usage: UsageLike): void {
  */
 export function computeSessionTotals(ctx: ExtensionContext): SessionTotals {
   const totals: SessionTotals = { byModel: new Map() }
-  const config = loadDeepseekCostConfig(ctx)
   let lastModelId: string | undefined
 
   const getModelTotals = (modelId: string | undefined): ModelTotals => {
@@ -151,26 +185,42 @@ export function computeSessionTotals(ctx: ExtensionContext): SessionTotals {
     const m = getModelTotals(modelId)
     addUsage(m, usage)
 
-    // Cost per entry in both currencies, peak-aware. cacheWrite is billed
-    // as input.
+    // Cost per entry in both currencies, peak-aware. cacheWrite is billed as
+    // input. Peak/off-peak pricing is official and intrinsic: pick the rate
+    // set by the entry's own timestamp.
     const rateKey = modelId ?? lastModelId ?? 'unknown'
     const rate = DEEPSEEK_RATES[rateKey]
     if (rate) {
       const inputTokens = (usage.input ?? 0) + (usage.cacheWrite ?? 0)
+      const peak = isPeakHour(new Date(entry.timestamp))
+      const r = peak
+        ? {
+            in: rate.peakInput,
+            read: rate.peakCacheRead,
+            out: rate.peakOutput,
+            usdIn: rate.peakUsdInput,
+            usdRead: rate.peakUsdCacheRead,
+            usdOut: rate.peakUsdOutput,
+          }
+        : {
+            in: rate.input,
+            read: rate.cacheRead,
+            out: rate.output,
+            usdIn: rate.usdInput,
+            usdRead: rate.usdCacheRead,
+            usdOut: rate.usdOutput,
+          }
       const baseCny =
-        (inputTokens * rate.input +
-          (usage.cacheRead ?? 0) * rate.cacheRead +
-          (usage.output ?? 0) * rate.output) /
+        (inputTokens * r.in + (usage.cacheRead ?? 0) * r.read + (usage.output ?? 0) * r.out) /
         1_000_000
       const baseUsd =
-        (inputTokens * rate.usdInput +
-          (usage.cacheRead ?? 0) * rate.usdCacheRead +
-          (usage.output ?? 0) * rate.usdOutput) /
+        (inputTokens * r.usdIn +
+          (usage.cacheRead ?? 0) * r.usdRead +
+          (usage.output ?? 0) * r.usdOut) /
         1_000_000
-      const mult = peakMultiplierFor(new Date(entry.timestamp), config)
-      if (mult > 1) {
-        m.cny.peak += baseCny * mult
-        m.usd.peak += baseUsd * mult
+      if (peak) {
+        m.cny.peak += baseCny
+        m.usd.peak += baseUsd
       } else {
         m.cny.offpeak += baseCny
         m.usd.offpeak += baseUsd

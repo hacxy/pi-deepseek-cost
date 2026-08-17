@@ -1,6 +1,7 @@
 /**
  * Pricing / aggregation tests: multi-model totals, dual-currency cost,
- * peak-hour multiplier, unknown-rate fallback, cacheWrite handling.
+ * official peak/off-peak rates, deprecated-alias pricing, unknown-rate
+ * fallback, cacheWrite handling.
  */
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -45,10 +46,10 @@ describe('computeSessionTotals', () => {
     expect(m.cacheRead).toBe(500)
     expect(m.output).toBe(300)
     expect(m.totalTokens).toBe(1800)
-    // CNY: (1000*1 + 500*0.02 + 300*2)/1e6 = 0.00161
-    expect(modelCostCny(m)).toBeCloseTo(0.00161, 10)
-    // USD: (1000*0.14 + 500*0.0028 + 300*0.28)/1e6 = 0.0002254
-    expect(modelCostUsd(m)).toBeCloseTo(0.0002254, 10)
+    // CNY off-peak: (1000*1.5 + 500*0.05 + 300*4.5)/1e6 = 0.002875
+    expect(modelCostCny(m)).toBeCloseTo(0.002875, 10)
+    // USD off-peak: (1000*0.22 + 500*0.007 + 300*0.66)/1e6 = 0.0004215
+    expect(modelCostUsd(m)).toBeCloseTo(0.0004215, 10)
   })
 
   it('attributes toolResult usage to the last assistant model', () => {
@@ -89,8 +90,8 @@ describe('computeSessionTotals', () => {
     const totals = computeSessionTotals(h.ctx)
     const m = totals.byModel.get('deepseek-v4-flash')!
     expect(m.input).toBe(500)
-    // CNY input portion: 500 * 1 / 1e6 = 0.0005
-    expect(modelCostCny(m)).toBeCloseTo(0.0005, 10)
+    // CNY input portion (off-peak): 500 * 1.5 / 1e6 = 0.00075
+    expect(modelCostCny(m)).toBeCloseTo(0.00075, 10)
   })
 
   it('splits per-model totals across model switches', () => {
@@ -106,10 +107,10 @@ describe('computeSessionTotals', () => {
     const pro = totals.byModel.get('deepseek-v4-pro')!
     expect(flash.input).toBe(1000)
     expect(pro.input).toBe(2000)
-    // flash: (1000*1 + 100*2)/1e6 = 0.0012 ; pro: (2000*3 + 200*6)/1e6 = 0.0072
-    expect(modelCostCny(flash)).toBeCloseTo(0.0012, 10)
-    expect(modelCostCny(pro)).toBeCloseTo(0.0072, 10)
-    expect(sessionCostCny(totals)).toBeCloseTo(0.0084, 10)
+    // flash: (1000*1.5 + 100*4.5)/1e6 = 0.00195 ; pro: (2000*4.5 + 200*13.5)/1e6 = 0.0117
+    expect(modelCostCny(flash)).toBeCloseTo(0.00195, 10)
+    expect(modelCostCny(pro)).toBeCloseTo(0.0117, 10)
+    expect(sessionCostCny(totals)).toBeCloseTo(0.01365, 10)
   })
 
   it('returns null cost when no model has a known rate', () => {
@@ -121,8 +122,8 @@ describe('computeSessionTotals', () => {
     expect(sessionCostUsd(totals)).toBeNull()
   })
 
-  it('applies the peak multiplier to peak-hour messages only', () => {
-    env({ deepseekCost: { peakPricing: true, peakMultiplier: 2 } })
+  it('applies official peak rates to peak-hour messages only', () => {
+    env()
     const entries = [
       // Beijing 10:00 (UTC 02:00) → peak
       usageEntry(
@@ -142,13 +143,29 @@ describe('computeSessionTotals', () => {
     const h = makeHarness(entries)
     const totals = computeSessionTotals(h.ctx)
     const m = totals.byModel.get('deepseek-v4-flash')!
-    // peak: (1000*1 + 300*2)/1e6 * 2 = 0.0032
-    // off:  (500*1 + 100*2)/1e6 * 1 = 0.0007
-    expect(m.cny.peak).toBeCloseTo(0.0032, 10)
-    expect(m.cny.offpeak).toBeCloseTo(0.0007, 10)
-    expect(modelCostCny(m)).toBeCloseTo(0.0039, 10)
-    // USD mirror: peak (1000*0.14 + 300*0.28)/1e6 * 2 = 0.000448
-    expect(m.usd.peak).toBeCloseTo(0.000448, 10)
+    // peak (flash peak rates): (1000*3 + 300*9)/1e6 = 0.0057
+    // off (flash off-peak rates): (500*1.5 + 100*4.5)/1e6 = 0.0012
+    expect(m.cny.peak).toBeCloseTo(0.0057, 10)
+    expect(m.cny.offpeak).toBeCloseTo(0.0012, 10)
+    expect(modelCostCny(m)).toBeCloseTo(0.0069, 10)
+    // USD mirror: peak (1000*0.44 + 300*1.32)/1e6 = 0.000836
+    expect(m.usd.peak).toBeCloseTo(0.000836, 10)
+  })
+
+  it('prices deprecated deepseek-chat/reasoner aliases at flash rates', () => {
+    env()
+    const entries = [
+      usageEntry('assistant', 'deepseek-chat', { input: 1000, output: 100 }),
+      usageEntry('assistant', 'deepseek-reasoner', { input: 500, output: 50 }),
+    ]
+    const h = makeHarness(entries)
+    const totals = computeSessionTotals(h.ctx)
+    const chat = totals.byModel.get('deepseek-chat')!
+    const reasoner = totals.byModel.get('deepseek-reasoner')!
+    // Both map to V4 Flash off-peak rates.
+    expect(modelCostCny(chat)).toBeCloseTo((1000 * 1.5 + 100 * 4.5) / 1e6, 10)
+    expect(modelCostCny(reasoner)).toBeCloseTo((500 * 1.5 + 50 * 4.5) / 1e6, 10)
+    expect(sessionCostUsd(totals)).not.toBeNull()
   })
 
   it('grandTotals merges all models', () => {
