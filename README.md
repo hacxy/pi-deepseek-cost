@@ -5,7 +5,7 @@
 
 > [简体中文](README_ZH.md)
 
-> A [Pi](https://pi.dev) extension that tracks your **DeepSeek usage & cost** — live session cost in the status bar, a `/ds-cost` overlay panel, bilingual UI (中文/English) with currency switching, and official peak/off-peak billing.
+> A [Pi](https://pi.dev) extension that tracks your **DeepSeek usage & cost** — live session cost in the status bar, a `/ds-cost` overlay panel, bilingual UI (中文/English), CNY/USD/EUR display, and official peak/off-peak billing.
 
 ## Screenshots
 
@@ -16,9 +16,9 @@
 ## Features
 
 - **Status bar**: live cumulative cost for the current session (`¥0.019`), refreshed after every turn — cost only, no noise (an empty session shows `¥0`)
-- **`/ds-cost`**: floating overlay panel — per-model token usage (cache-hit / cache-miss input, output), cache hit rate, CNY/USD cost breakdown, peak-hour split, USD↔CNY cross-reference
+- **`/ds-cost`**: floating overlay panel — per-model token usage (cache-hit / cache-miss input, output), cache hit rate, CNY/USD/EUR cost breakdown, peak-hour split, cross-reference to the other _official_ currency
 - **Model-aware**: active only when the model runs on the **native DeepSeek provider** (`provider: "deepseek"` — i.e. billed by DeepSeek itself); DeepSeek models served through other providers or gateways (OpenRouter, OpenAI-compatible proxies, …) keep the extension invisible, since only official DeepSeek billing can be priced here
-- **Bilingual + currency**: zh → ¥ (CNY), en → $ (USD). Switch inside the panel with `L`, or globally with `Ctrl+Shift+L`
+- **Bilingual + currency**: language and currency are separate — `locale` controls UI text (default zh → ¥, en → $), `currency` controls display (`cny`/`usd` official; `eur` = official USD prices × your `eurRate`, shown `≈`). Cycle the currency inside the panel with `L` or globally with `Ctrl+Shift+L` (¥ → $ → €)
 - **Official peak/off-peak pricing**: intrinsic — each message is charged at the peak (×2) or off-peak rate of its own timestamp (UTC 01:00–04:00 & 06:00–10:00)
 
 ## Installation
@@ -41,12 +41,13 @@ Requires:
 
 ## Usage
 
-| Action                  | How                                                                    |
-| ----------------------- | ---------------------------------------------------------------------- |
-| View session cost       | Watch the status bar (updates after each turn)                         |
-| Detailed cost panel     | `/ds-cost` (Esc to close, `L` to switch language)                      |
-| Switch language (zh↔en) | `L` inside a panel, or `Ctrl+Shift+L` (rebindable in keybindings.json) |
-| Set language in config  | `deepseekCost.locale` in settings.json                                 |
+| Action                 | How                                                                    |
+| ---------------------- | ---------------------------------------------------------------------- |
+| View session cost      | Watch the status bar (updates after each turn)                         |
+| Detailed cost panel    | `/ds-cost` (Esc to close, `L` to cycle currency)                       |
+| Cycle currency (¥/$/€) | `L` inside a panel, or `Ctrl+Shift+L` (rebindable in keybindings.json) |
+| Set language in config | `deepseekCost.locale` in settings.json                                 |
+| Set currency in config | `deepseekCost.currency` (+ `eurRate` for EUR) in settings.json         |
 
 ## Configuration
 
@@ -55,14 +56,18 @@ In `~/.pi/agent/settings.json` (global) or `.pi/settings.json` (project, overrid
 ```json
 {
   "deepseekCost": {
-    "locale": "zh"
+    "locale": "zh",
+    "currency": "cny",
+    "eurRate": 0.92
   }
 }
 ```
 
-| Key      | Default | Description                                                      |
-| -------- | ------- | ---------------------------------------------------------------- |
-| `locale` | `"zh"`  | UI language: `"zh"` or `"en"`. Currency follows (zh → ¥, en → $) |
+| Key        | Default      | Description                                                                              |
+| ---------- | ------------ | ---------------------------------------------------------------------------------------- |
+| `locale`   | `"zh"`       | UI language: `"zh"` or `"en"`                                                            |
+| `currency` | locale-based | Display currency: `"cny"` / `"usd"` / `"eur"` (defaults from locale: zh → cny, en → usd) |
+| `eurRate`  | `0.92`       | EUR per 1 USD, used only for `"eur"`. Reference only — set it to your own rate           |
 
 Config edits take effect immediately (re-read on every calculation).
 
@@ -76,6 +81,7 @@ Peak/off-peak pricing is official and always in effect. Each message is charged 
 
 - Token numbers come from the real `usage` blocks Pi persists on messages (`input` = cache-miss input, `cacheRead` = cache-hit input, `output`), matching DeepSeek API's `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens` / `completion_tokens`
 - CNY and USD both use DeepSeek's official per-million-token prices as printed on the [pricing page](https://api-docs.deepseek.com/quick_start/pricing) (≈¥6.9/$). Off-peak is exactly half of peak.
+- **EUR is not an official DeepSeek currency**: with `currency: "eur"`, the official USD totals are converted at `deepseekCost.eurRate` (EUR per 1 USD), shown with an `≈` prefix and a footnote stating the rate. The default `0.92` is a reference placeholder — verify and set `eurRate` yourself before relying on it.
 
 | Model               | Period   | Input · cache miss | Input · cache hit  | Output            |
 | ------------------- | -------- | ------------------ | ------------------ | ----------------- |

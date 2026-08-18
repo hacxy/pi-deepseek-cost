@@ -3,12 +3,13 @@
  * `/ds-cost` panel. All user-facing strings come from i18n.ts, selected by the
  * configured locale (settings.json `deepseekCost.locale`).
  *
- * The display currency follows the locale: zh → CNY (¥), en → USD ($). Each
- * model's rates carry both currencies and both peak/off-peak sets (see
- * pricing.ts). Peak pricing is official and always in effect.
+ * The display currency comes from config: cny/usd are official, eur is the
+ * official USD totals × the user rate (see pricing.ts). Peak pricing is
+ * official and always in effect; the panel always keeps one cross-reference
+ * row in the other *official* currency so converted amounts stay verifiable.
  */
 
-import type { Messages } from './i18n'
+import type { Currency, Messages } from './i18n'
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent'
 
 import { matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
@@ -16,6 +17,7 @@ import { matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from '@ea
 import { isPeakHour, loadDeepseekCostConfig, PEAK_MULTIPLIER } from './config'
 import {
   formatCny,
+  formatEur,
   formatShortTokens,
   formatTokens,
   formatUsd,
@@ -28,10 +30,13 @@ import {
   DEEPSEEK_RATES,
   grandTotals,
   modelCostCny,
+  modelCostEur,
   modelCostUsd,
   sessionCostCny,
+  sessionCostEur,
   sessionCostUsd,
   type ModelRate,
+  type ModelTotals,
 } from './pricing'
 
 /**
@@ -39,13 +44,13 @@ import {
  * the top border, content lines padded inside. Esc / Ctrl+C closes it.
  */
 export class OverlayPanel {
-  private onClose: (value?: 'toggle-lang' | undefined) => void
+  private onClose: (value?: 'toggle-currency' | undefined) => void
 
   constructor(
     private lines: string[],
     private title: string,
     private theme: Theme,
-    onClose: (value?: 'toggle-lang' | undefined) => void,
+    onClose: (value?: 'toggle-currency' | undefined) => void,
   ) {
     this.onClose = onClose
   }
@@ -54,8 +59,8 @@ export class OverlayPanel {
     if (matchesKey(data, 'escape') || matchesKey(data, 'ctrl+c')) {
       this.onClose()
     } else if (data === 'l' || data === 'L') {
-      // Quick language toggle; the caller reopens the panel in the new locale.
-      this.onClose('toggle-lang')
+      // Quick currency toggle; the caller reopens the panel in the new currency.
+      this.onClose('toggle-currency')
     }
   }
 
@@ -112,11 +117,11 @@ function peakStateLine(m: Messages, theme: Theme): string {
   return `  ${theme.fg('muted', m.period)} ${theme.fg(isPeak ? 'warning' : 'dim', label)}`
 }
 
-/** Currency selection: zh → CNY (¥), en → USD ($). */
+/** Currency selection: official CNY/USD, or EUR converted at the user rate. */
 interface Money {
-  /** Format an amount in the primary currency. */
+  /** Format an amount in the primary currency (EUR amounts carry `≈`). */
   fmt: (n: number) => string
-  /** Format an amount in the cross-reference currency. */
+  /** Format an amount in the cross-reference (other official) currency. */
   crossFmt: (n: number) => string
   in: (r: ModelRate) => number
   read: (r: ModelRate) => number
@@ -127,28 +132,56 @@ interface Money {
   modelCost: (
     t: ReturnType<typeof computeSessionTotals>['byModel'] extends Map<string, infer T> ? T : never,
   ) => number
+  /** Grand-total off-peak cost in the primary currency. */
+  offpeak: (g: ModelTotals) => number
+  /** Grand-total peak cost in the primary currency. */
+  peak: (g: ModelTotals) => number
+  /** The other *official* currency's grand total (cross-reference). */
+  crossTotal: (g: ModelTotals) => number
 }
 
-function moneyFor(isCny: boolean): Money {
-  return isCny
-    ? {
-        fmt: formatCny,
-        crossFmt: formatUsd,
-        in: (r) => r.input,
-        read: (r) => r.cacheRead,
-        out: (r) => r.output,
-        total: sessionCostCny,
-        modelCost: modelCostCny,
-      }
-    : {
-        fmt: formatUsd,
-        crossFmt: formatCny,
-        in: (r) => r.usdInput,
-        read: (r) => r.usdCacheRead,
-        out: (r) => r.usdOutput,
-        total: sessionCostUsd,
-        modelCost: modelCostUsd,
-      }
+function moneyFor(currency: Currency, eurPerUsd: number): Money {
+  if (currency === 'cny') {
+    return {
+      fmt: formatCny,
+      crossFmt: formatUsd,
+      in: (r) => r.input,
+      read: (r) => r.cacheRead,
+      out: (r) => r.output,
+      total: sessionCostCny,
+      modelCost: modelCostCny,
+      offpeak: (g) => g.cny.offpeak,
+      peak: (g) => g.cny.peak,
+      crossTotal: (g) => g.usd.peak + g.usd.offpeak,
+    }
+  }
+  if (currency === 'usd') {
+    return {
+      fmt: formatUsd,
+      crossFmt: formatCny,
+      in: (r) => r.usdInput,
+      read: (r) => r.usdCacheRead,
+      out: (r) => r.usdOutput,
+      total: sessionCostUsd,
+      modelCost: modelCostUsd,
+      offpeak: (g) => g.usd.offpeak,
+      peak: (g) => g.usd.peak,
+      crossTotal: (g) => g.cny.peak + g.cny.offpeak,
+    }
+  }
+  // EUR: official USD totals × user rate. `≈` marks it as a conversion.
+  return {
+    fmt: (n) => `≈${formatEur(n)}`,
+    crossFmt: formatUsd,
+    in: (r) => r.usdInput * eurPerUsd,
+    read: (r) => r.usdCacheRead * eurPerUsd,
+    out: (r) => r.usdOutput * eurPerUsd,
+    total: (totals) => sessionCostEur(totals, eurPerUsd),
+    modelCost: (t) => modelCostEur(t, eurPerUsd),
+    offpeak: (g) => g.usd.offpeak * eurPerUsd,
+    peak: (g) => g.usd.peak * eurPerUsd,
+    crossTotal: (g) => g.usd.peak + g.usd.offpeak,
+  }
 }
 
 /** Build the `/ds-cost` panel content lines. */
@@ -157,7 +190,7 @@ export function buildCostPanelLines(ctx: ExtensionContext, theme: Theme): string
   const g = grandTotals(totals)
   const config = loadDeepseekCostConfig(ctx)
   const m = getMessages(config.locale)
-  const money = moneyFor(config.locale === 'zh')
+  const money = moneyFor(config.currency, config.eurRate)
   const sessionTotal = money.total(totals)
   const currentModelId = ctx.model?.id
   const currentRate = currentModelId ? DEEPSEEK_RATES[currentModelId] : undefined
@@ -195,7 +228,7 @@ export function buildCostPanelLines(ctx: ExtensionContext, theme: Theme): string
   }
 
   lines.push('')
-  lines.push(`  ${theme.fg('muted', theme.bold(m.costSection))}`)
+  lines.push(`  ${theme.fg('muted', theme.bold(m.costSection(config.currency)))}`)
   if (sessionTotal !== null) {
     if (totals.byModel.size === 1) {
       const first = [...totals.byModel.entries()][0]
@@ -235,8 +268,8 @@ export function buildCostPanelLines(ctx: ExtensionContext, theme: Theme): string
       }
     }
     // Peak/off-peak split (official peak pricing, always shown).
-    const offpeak = config.locale === 'zh' ? g.cny.offpeak : g.usd.offpeak
-    const peak = config.locale === 'zh' ? g.cny.peak : g.usd.peak
+    const offpeak = money.offpeak(g)
+    const peak = money.peak(g)
     lines.push(row(theme.fg('dim', m.offpeakPeriod), theme.fg('muted', money.fmt(offpeak))))
     lines.push(
       row(theme.fg('dim', m.peakPeriod(PEAK_MULTIPLIER)), theme.fg('warning', money.fmt(peak))),
@@ -248,17 +281,25 @@ export function buildCostPanelLines(ctx: ExtensionContext, theme: Theme): string
         theme.fg('success', theme.bold(money.fmt(sessionTotal))),
       ),
     )
-    // Cross-currency reference: the other currency's session total.
-    const crossTotal =
-      config.locale === 'zh' ? g.usd.peak + g.usd.offpeak : g.cny.peak + g.cny.offpeak
-    lines.push(row(theme.fg('dim', m.crossRef), theme.fg('muted', money.crossFmt(crossTotal))))
+    // Cross-currency reference: the other *official* currency's total.
+    const crossTotal = money.crossTotal(g)
+    lines.push(
+      row(
+        theme.fg('dim', m.crossRef(config.currency)),
+        theme.fg('muted', money.crossFmt(crossTotal)),
+      ),
+    )
   } else {
     lines.push(`  ${theme.fg('warning', m.noKnownRate)}`)
   }
 
   lines.push('')
   lines.push(`  ${theme.fg('dim', m.peakNote)}`)
-  lines.push(`  ${theme.fg('dim', `L ${m.langToggleHint} · ${m.escClose}`)}`)
+  // EUR is a user-rate conversion, never an official price: say so in the panel.
+  if (config.currency === 'eur') {
+    lines.push(`  ${theme.fg('dim', m.eurNote(config.eurRate))}`)
+  }
+  lines.push(`  ${theme.fg('dim', `L ${m.currencyToggleHint} · ${m.escClose}`)}`)
   return lines
 }
 

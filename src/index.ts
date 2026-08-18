@@ -2,10 +2,12 @@
  * DeepSeek usage & cost tracker for pi.
  *
  * Features:
- *  - Footer status: live cumulative cost for the current session (CNY and
- *    USD at DeepSeek official rates, peak-aware).
- *  - `/ds-cost` — floating overlay with per-model token usage, CNY breakdown
- *    (peak-aware), USD cross-check.
+ *  - Footer status: live cumulative cost for the current session (CNY, USD,
+ *    or EUR at the official rates, peak-aware). EUR is a conversion of the
+ *    official USD prices at `deepseekCost.eurRate` — not official, and marked
+ *    `≈` in the UI.
+ *  - `/ds-cost` — floating overlay with per-model token usage, cost breakdown
+ *    (peak-aware), and a cross-check in the other *official* currency.
  *
  * Only active when the model runs on the native DeepSeek provider (`provider`
  * === `deepseek`, i.e. billed by DeepSeek itself). DeepSeek models served by
@@ -13,19 +15,19 @@
  * keep the extension fully invisible: only DeepSeek's official billing can be
  * priced by this extension.
  *
- * Peak/off-peak pricing is official and intrinsic (see pricing.ts); only the
- * UI language is configurable via the `deepseekCost` section of settings.json
- * — see config.ts for the schema.
+ * Peak/off-peak pricing is official and intrinsic (see pricing.ts); the UI
+ * language and display currency are configurable via the `deepseekCost`
+ * section of settings.json — see config.ts for the schema.
  */
 
-import type { Locale } from './i18n'
+import type { Currency } from './i18n'
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent'
 
-import { loadDeepseekCostConfig, writeLocale } from './config'
-import { formatCny, formatUsd } from './format'
+import { loadDeepseekCostConfig, writeCurrency } from './config'
+import { formatCny, formatEur, formatUsd } from './format'
 import { getMessages } from './i18n'
 import { buildCostPanelLines, OverlayPanel } from './panel'
-import { computeSessionTotals, sessionCostCny, sessionCostUsd } from './pricing'
+import { computeSessionTotals, sessionCostCny, sessionCostEur, sessionCostUsd } from './pricing'
 
 // ---------------------------------------------------------------------------
 // Model detection
@@ -49,30 +51,45 @@ function updateStatus(ctx: ExtensionContext): void {
     return
   }
   // The status bar shows cost only (that's what the user watches). The
-  // currency follows the locale: zh → ¥ (CNY), en → $ (USD).
+  // currency comes from config: cny/usd official, eur is a `≈`-marked
+  // conversion of the official USD totals at the user rate.
   // No known-rate usage yet → show 0 rather than "n/a" for a cleaner feel.
   const totals = computeSessionTotals(ctx)
   const theme = ctx.ui.theme
   const config = loadDeepseekCostConfig(ctx)
-  const isCny = config.locale === 'zh'
-  const fmt = isCny ? formatCny : formatUsd
-  const total = isCny ? sessionCostCny(totals) : sessionCostUsd(totals)
+  const { currency, eurRate } = config
+  const fmt =
+    currency === 'cny'
+      ? formatCny
+      : currency === 'usd'
+        ? formatUsd
+        : (n: number) => `≈${formatEur(n)}`
+  const total =
+    currency === 'cny'
+      ? sessionCostCny(totals)
+      : currency === 'usd'
+        ? sessionCostUsd(totals)
+        : sessionCostEur(totals, eurRate)
   const costText = total !== null ? theme.fg('success', fmt(total)) : theme.fg('dim', fmt(0))
   ctx.ui.setStatus('ds-cost', costText)
 }
 
 // ---------------------------------------------------------------------------
-// Language switching
+// Currency switching
 // ---------------------------------------------------------------------------
 
-/** Toggle zh ↔ en based on the current config. */
-function nextLocale(ctx: ExtensionContext): Locale {
-  return loadDeepseekCostConfig(ctx).locale === 'zh' ? 'en' : 'zh'
+/** Cycle order for the display currency. */
+const CURRENCIES: readonly Currency[] = ['cny', 'usd', 'eur']
+
+/** Cycle cny → usd → eur → cny based on the current config. */
+function nextCurrency(ctx: ExtensionContext): Currency {
+  const cur = loadDeepseekCostConfig(ctx).currency
+  return CURRENCIES[(CURRENCIES.indexOf(cur) + 1) % CURRENCIES.length] ?? 'cny'
 }
 
-/** Persist `locale` and refresh the status bar. Returns success. */
-function applyLocale(ctx: ExtensionContext, locale: Locale): boolean {
-  const ok = writeLocale(locale)
+/** Persist `currency` and refresh the status bar. Returns success. */
+function applyCurrency(ctx: ExtensionContext, currency: Currency): boolean {
+  const ok = writeCurrency(currency)
   if (ok) updateStatus(ctx)
   return ok
 }
@@ -97,17 +114,19 @@ export default function (pi: ExtensionAPI) {
     updateStatus(ctx)
   })
 
-  // Quick toggle via keyboard: ctrl+shift+L (customizable in keybindings).
+  // Quick cycle via keyboard: ctrl+shift+L (customizable in keybindings).
+  // Cycles the display currency ¥ → $ → €; the UI *language* is set only via
+  // settings.json (`deepseekCost.locale`) — language and currency are separate.
   pi.registerShortcut('ctrl+shift+l', {
-    description: 'Toggle DeepSeek cost UI language',
+    description: 'Cycle DeepSeek cost display currency (¥ / $ / €)',
     handler: (ctx) => {
-      const locale = nextLocale(ctx)
-      const m = getMessages(locale)
-      if (!applyLocale(ctx, locale)) {
-        ctx.ui.notify(m.langWriteFailed, 'error')
+      const currency = nextCurrency(ctx)
+      const m = getMessages(loadDeepseekCostConfig(ctx).locale)
+      if (!applyCurrency(ctx, currency)) {
+        ctx.ui.notify(m.writeFailed, 'error')
         return
       }
-      ctx.ui.notify(m.langSwitched(locale), 'info')
+      ctx.ui.notify(m.currencySwitched(currency), 'info')
     },
   })
 
@@ -140,13 +159,13 @@ export default function (pi: ExtensionAPI) {
             },
           },
         )
-        if (result !== 'toggle-lang') return
-        const locale = nextLocale(ctx)
-        if (!applyLocale(ctx, locale)) {
-          ctx.ui.notify(getMessages(locale).langWriteFailed, 'error')
+        if (result !== 'toggle-currency') return
+        const currency = nextCurrency(ctx)
+        if (!applyCurrency(ctx, currency)) {
+          ctx.ui.notify(m.writeFailed, 'error')
           return
         }
-        // Reopen the panel in the new language.
+        // Reopen the panel with the new currency (language unchanged).
       }
     },
   })

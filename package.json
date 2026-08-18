@@ -1,7 +1,7 @@
 {
   "name": "pi-deepseek-cost",
   "version": "0.3.0",
-  "description": "DeepSeek usage & cost tracker for Pi — live session cost in the status bar, /ds-cost overlay panel, bilingual UI, official peak/off-peak billing",
+  "description": "DeepSeek usage & cost tracker for Pi — live session cost in the status bar, /ds-cost overlay panel, bilingual UI with CNY/USD/EUR display, official peak/off-peak billing",
   "keywords": [
     "pi-package",
     "pi-extension",

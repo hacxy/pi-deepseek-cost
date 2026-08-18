@@ -36,6 +36,14 @@ export function formatUsd(n: number): string {
   return `$${n.toFixed(6)}`
 }
 
+export function formatEur(n: number): string {
+  if (n === 0) return '€0'
+  if (n >= 1) return `€${n.toFixed(2)}`
+  if (n >= 0.01) return `€${n.toFixed(3)}`
+  if (n >= 0.0001) return `€${n.toFixed(4)}`
+  return `€${n.toFixed(6)}`
+}
+
 /** Pad a string to `width` visible columns (CJK wide chars count as 2). */
 export function padVisible(s: string, width: number): string {
   const pad = Math.max(0, width - visibleWidth(s))
