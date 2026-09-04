@@ -42,7 +42,7 @@ function isDeepSeekModel(ctx: ExtensionContext): boolean {
 // Footer status
 // ---------------------------------------------------------------------------
 
-function updateStatus(ctx: ExtensionContext): void {
+function updateStatus(ctx: ExtensionContext, now: Date = new Date()): void {
   // Non-DeepSeek models: keep the extension fully invisible.
   if (!isDeepSeekModel(ctx)) {
     ctx.ui.setStatus('ds-cost', undefined)
@@ -60,7 +60,7 @@ function updateStatus(ctx: ExtensionContext): void {
   const costText = total !== null ? theme.fg('success', fmt(total)) : theme.fg('dim', fmt(0))
   // Peak indicator: when the current time is inside an official peak window,
   // append a warning-colored lightning bolt so the footer shows peak is live.
-  const peakMark = isPeakHour(new Date()) ? theme.fg('warning', ' ⚡') : ''
+  const peakMark = isPeakHour(now) ? theme.fg('warning', ' ⚡') : ''
   ctx.ui.setStatus('ds-cost', costText + peakMark)
 }
 

@@ -83,6 +83,18 @@ export interface Harness {
   statuses: Array<string | undefined>
 }
 
+const activeHarnesses: Harness[] = []
+
+/** Fire session_shutdown on every harness created so far and clear the list. */
+export function shutdownHarnesses(): void {
+  for (const h of activeHarnesses) {
+    for (const handler of h.handlers['session_shutdown'] ?? []) {
+      handler({}, h.ctx)
+    }
+  }
+  activeHarnesses.length = 0
+}
+
 /**
  * Build a mock pi + ctx and run the extension factory against it. The mock
  * `ctx.ui.custom` returns the component synchronously and never resolves the
@@ -134,7 +146,9 @@ export function makeHarness(entries: Array<Record<string, unknown>>): Harness {
   // Install the extension so events/commands/shortcuts are registered.
   installExtension(pi)
 
-  return { pi, handlers, commands, shortcuts, ctx, notifies, statuses }
+  const harness: Harness = { pi, handlers, commands, shortcuts, ctx, notifies, statuses }
+  activeHarnesses.push(harness)
+  return harness
 }
 
 /** Run an async handler and flush pending microtasks. */
