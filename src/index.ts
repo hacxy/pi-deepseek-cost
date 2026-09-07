@@ -21,7 +21,7 @@
 import type { Locale } from './i18n'
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent'
 
-import { loadDeepseekCostConfig, writeLocale } from './config'
+import { isPeakHour, loadDeepseekCostConfig, writeLocale } from './config'
 import { formatCny, formatUsd } from './format'
 import { getMessages } from './i18n'
 import { buildCostPanelLines, OverlayPanel } from './panel'
@@ -42,7 +42,7 @@ function isDeepSeekModel(ctx: ExtensionContext): boolean {
 // Footer status
 // ---------------------------------------------------------------------------
 
-function updateStatus(ctx: ExtensionContext): void {
+function updateStatus(ctx: ExtensionContext, now: Date = new Date()): void {
   // Non-DeepSeek models: keep the extension fully invisible.
   if (!isDeepSeekModel(ctx)) {
     ctx.ui.setStatus('ds-cost', undefined)
@@ -58,7 +58,36 @@ function updateStatus(ctx: ExtensionContext): void {
   const fmt = isCny ? formatCny : formatUsd
   const total = isCny ? sessionCostCny(totals) : sessionCostUsd(totals)
   const costText = total !== null ? theme.fg('success', fmt(total)) : theme.fg('dim', fmt(0))
-  ctx.ui.setStatus('ds-cost', costText)
+  // Peak indicator: when the current time is inside an official peak window,
+  // append a warning-colored lightning bolt so the footer shows peak is live.
+  const peakMark = isPeakHour(now) ? theme.fg('warning', ' ⚡') : ''
+  ctx.ui.setStatus('ds-cost', costText + peakMark)
+}
+
+// ---------------------------------------------------------------------------
+// Footer refresh timer
+// ---------------------------------------------------------------------------
+
+/** How often to refresh the footer while idle (keeps the ⚡ peak indicator in
+ * sync with peak-window boundaries). */
+const FOOTER_REFRESH_MS = 30_000
+
+let footerTimer: ReturnType<typeof setInterval> | undefined
+
+/** Start the idle refresh loop for the current session. Idempotent. */
+function startFooterTimer(ctx: ExtensionContext): void {
+  stopFooterTimer()
+  // Only the interactive TUI has a footer worth keeping fresh.
+  if (ctx.mode !== 'tui') return
+  footerTimer = setInterval(() => updateStatus(ctx), FOOTER_REFRESH_MS)
+}
+
+/** Stop the idle refresh loop. Safe to call when no timer is running. */
+function stopFooterTimer(): void {
+  if (footerTimer) {
+    clearInterval(footerTimer)
+    footerTimer = undefined
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -86,6 +115,10 @@ export default function (pi: ExtensionAPI) {
   // switches (hide when the active model is not DeepSeek).
   pi.on('session_start', (_event, ctx) => {
     updateStatus(ctx)
+    startFooterTimer(ctx)
+  })
+  pi.on('session_shutdown', () => {
+    stopFooterTimer()
   })
   pi.on('model_select', (_event, ctx) => {
     updateStatus(ctx)

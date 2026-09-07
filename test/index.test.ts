@@ -5,13 +5,15 @@
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { loadDeepseekCostConfig } from '../src/config'
-import { createSettingsEnv, flush, makeHarness, usageEntry } from './helpers'
+import { createSettingsEnv, flush, makeHarness, shutdownHarnesses, usageEntry } from './helpers'
 
 const restores: Array<() => void> = []
 afterEach(() => {
+  shutdownHarnesses()
+  vi.useRealTimers()
   while (restores.length > 0) restores.pop()?.()
 })
 
@@ -80,6 +82,8 @@ describe('status bar (updateStatus)', () => {
 
   it('activates for any model id on the native deepseek provider (unknown ids included)', async () => {
     env()
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2025-01-01T11:00:00Z')) // off-peak
     const h = makeHarness([])
     h.ctx.model = {
       id: 'deepseek-future-gen',
@@ -104,9 +108,61 @@ describe('status bar (updateStatus)', () => {
 
   it('shows ¥0 for an empty session', async () => {
     env({ deepseekCost: { locale: 'zh' } })
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2025-01-01T11:00:00Z')) // off-peak
     const h = makeHarness([])
     await h.handlers.session_start![0]!({}, h.ctx)
     expect(h.statuses.at(-1)).toBe('¥0')
+  })
+})
+
+describe('footer peak indicator', () => {
+  it('appends ⚡ during peak windows', async () => {
+    env({ deepseekCost: { locale: 'zh' } })
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2025-01-01T02:00:00Z')) // peak (UTC 01:00–04:00)
+    const h = makeHarness([])
+    await h.handlers.session_start![0]!({}, h.ctx)
+    expect(h.statuses.at(-1)).toBe('¥0 ⚡')
+  })
+
+  it('omits ⚡ outside peak windows', async () => {
+    env({ deepseekCost: { locale: 'zh' } })
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2025-01-01T11:00:00Z'))
+    const h = makeHarness([])
+    await h.handlers.session_start![0]!({}, h.ctx)
+    expect(h.statuses.at(-1)).toBe('¥0')
+  })
+})
+
+describe('footer refresh timer', () => {
+  it('starts on session_start and clears on session_shutdown', async () => {
+    env()
+    vi.useFakeTimers()
+    const h = makeHarness([])
+    await h.handlers.session_start![0]!({}, h.ctx)
+    expect(vi.getTimerCount()).toBe(1)
+    await h.handlers.session_shutdown![0]!({}, h.ctx)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('is idempotent across repeated session_start calls', async () => {
+    env()
+    vi.useFakeTimers()
+    const h = makeHarness([])
+    await h.handlers.session_start![0]!({}, h.ctx)
+    await h.handlers.session_start![0]!({}, h.ctx)
+    expect(vi.getTimerCount()).toBe(1)
+  })
+
+  it('does not start a timer outside TUI mode', async () => {
+    env()
+    vi.useFakeTimers()
+    const h = makeHarness([])
+    ;(h.ctx as { mode: string }).mode = 'print'
+    await h.handlers.session_start![0]!({}, h.ctx)
+    expect(vi.getTimerCount()).toBe(0)
   })
 })
 
