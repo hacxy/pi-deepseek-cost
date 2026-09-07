@@ -12,6 +12,11 @@
  * 09:00–12:00 and 14:00–18:00), each model stores both rate sets. Cost is
  * computed per entry against its own timestamp, so the peak/off-peak period at
  * the moment each message happened applies, identically for both currencies.
+ *
+ * EUR is NOT an official DeepSeek currency: it is derived at display time from
+ * the official USD totals × the user-configured `deepseekCost.eurRate` (see
+ * modelCostEur / sessionCostEur), so it carries no per-entry peak logic of its
+ * own — the USD total already is peak-aware.
  */
 
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent'
@@ -257,6 +262,14 @@ export function modelCostUsd(m: ModelTotals): number {
 }
 
 /**
+ * EUR cost for one model's usage: official USD total × the user rate.
+ * A conversion, not an official price.
+ */
+export function modelCostEur(m: ModelTotals, eurPerUsd: number): number {
+  return modelCostUsd(m) * eurPerUsd
+}
+
+/**
  * Total CNY for the session, or null when no model had a known rate.
  */
 export function sessionCostCny(session: SessionTotals): number | null {
@@ -278,4 +291,14 @@ export function sessionCostUsd(session: SessionTotals): number | null {
     total += modelCostUsd(m)
   }
   return hasKnownRate ? total : null
+}
+
+/**
+ * Total EUR for the session (official USD total × `eurPerUsd`), or null when
+ * no model had a known rate. EUR is a user-rate conversion, not an official
+ * DeepSeek price.
+ */
+export function sessionCostEur(session: SessionTotals, eurPerUsd: number): number | null {
+  const usd = sessionCostUsd(session)
+  return usd === null ? null : usd * eurPerUsd
 }

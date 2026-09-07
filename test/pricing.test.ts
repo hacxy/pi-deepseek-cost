@@ -10,8 +10,10 @@ import {
   computeSessionTotals,
   grandTotals,
   modelCostCny,
+  modelCostEur,
   modelCostUsd,
   sessionCostCny,
+  sessionCostEur,
   sessionCostUsd,
 } from '../src/pricing'
 import { compactionEntry, createSettingsEnv, makeHarness, usageEntry } from './helpers'
@@ -166,6 +168,32 @@ describe('computeSessionTotals', () => {
     expect(modelCostCny(chat)).toBeCloseTo((1000 * 1.5 + 100 * 4.5) / 1e6, 10)
     expect(modelCostCny(reasoner)).toBeCloseTo((500 * 1.5 + 50 * 4.5) / 1e6, 10)
     expect(sessionCostUsd(totals)).not.toBeNull()
+  })
+
+  it('derives EUR from the official USD total at the user rate', () => {
+    env()
+    const entries = [
+      usageEntry('assistant', 'deepseek-v4-flash', {
+        input: 1000,
+        cacheRead: 500,
+        output: 300,
+        totalTokens: 1800,
+      }),
+    ]
+    const h = makeHarness(entries)
+    const totals = computeSessionTotals(h.ctx)
+    const m = totals.byModel.get('deepseek-v4-flash')!
+    // USD off-peak: 0.0004215 → ×0.92
+    expect(modelCostUsd(m)).toBeCloseTo(0.0004215, 10)
+    expect(modelCostEur(m, 0.92)).toBeCloseTo(0.0004215 * 0.92, 13)
+    expect(sessionCostEur(totals, 0.92)).toBeCloseTo(0.0004215 * 0.92, 13)
+  })
+
+  it('EUR conversion is null when no model has a known rate', () => {
+    env()
+    const h = makeHarness([usageEntry('assistant', 'gpt-4o', { input: 100, output: 100 })])
+    const totals = computeSessionTotals(h.ctx)
+    expect(sessionCostEur(totals, 0.92)).toBeNull()
   })
 
   it('grandTotals merges all models', () => {

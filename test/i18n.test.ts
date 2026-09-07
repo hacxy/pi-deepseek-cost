@@ -34,8 +34,24 @@ describe('getMessages', () => {
     expect(zh.peakNote).toContain('高峰 ×2')
     expect(zh.peakNote).toContain('北京 9-12')
     expect(en.peakNote).toContain('UTC 01-04 / 06-10')
-    expect(zh.langSwitched('zh')).toBe('已切换为中文')
-    expect(en.langSwitched('en')).toBe('Switched to English')
+    expect(zh.currencySwitched('eur')).toBe('已切换货币: €')
+    expect(en.currencySwitched('cny')).toBe('Currency: ¥')
+  })
+
+  it('cost sections and cross-refs follow the display currency', () => {
+    const zh = getMessages('zh')
+    const en = getMessages('en')
+    expect(zh.costSection('cny')).toBe('费用 (官方价, ¥)')
+    expect(zh.costSection('usd')).toContain('$')
+    expect(zh.costSection('eur')).toContain('EUR')
+    expect(en.costSection('eur')).toBe('Cost (EUR, converted from official)')
+    expect(zh.crossRef('cny')).toBe('美元对照')
+    expect(zh.crossRef('eur')).toBe('美元对照 (官方)')
+    expect(en.crossRef('usd')).toBe('CNY (official)')
+    expect(en.crossRef('eur')).toBe('USD (official)')
+    // The EUR footnote states the conversion base and rate explicitly.
+    expect(zh.eurNote(0.92)).toBe('欧元为换算值: 1 USD ≈ 0.92 EUR (deepseekCost.eurRate)')
+    expect(en.eurNote(0.92)).toContain('1 USD ≈ 0.92 EUR')
   })
 
   it('all message values are non-empty', () => {

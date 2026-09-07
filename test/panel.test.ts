@@ -42,7 +42,20 @@ describe('buildCostPanelLines', () => {
     expect(lines.join('\n')).toContain('¥0.0029')
     // USD cross-ref: 0.0004215
     expect(lines.join('\n')).toContain('$0.0004')
-    expect(lines.join('\n')).toContain('L 切换语言 · Esc 关闭')
+    expect(lines.join('\n')).toContain('L 切换货币 · Esc 关闭')
+  })
+
+  it('renders EUR as an ≈-marked conversion with an official USD cross-ref', () => {
+    env({ deepseekCost: { locale: 'zh', currency: 'eur', eurRate: 0.5 } })
+    const h = makeHarness(FLASH_ENTRY())
+    const lines = buildCostPanelLines(h.ctx, mockTheme()).join('\n')
+    // USD total: (1000*0.22 + 500*0.007 + 300*0.66)/1e6 = 0.0004215 → ×0.5
+    expect(lines).toContain('费用 (EUR, 官方价换算)')
+    expect(lines).toContain('≈€0.0002')
+    expect(lines).toContain('美元对照 (官方)')
+    expect(lines).toContain('$0.0004')
+    expect(lines).toContain('欧元为换算值: 1 USD ≈ 0.5 EUR')
+    expect(lines).not.toContain('¥0')
   })
 
   it('renders an English panel in USD with CNY cross-reference', () => {
@@ -55,7 +68,7 @@ describe('buildCostPanelLines', () => {
     expect(lines).toContain('$0.0004')
     expect(lines).toContain('CNY (official)')
     expect(lines).toContain('¥0.0029')
-    expect(lines).toContain('L toggle language · Esc to close')
+    expect(lines).toContain('L toggle currency · Esc to close')
     expect(lines).not.toContain('合计')
   })
 
@@ -99,7 +112,7 @@ describe('buildCostPanelLines', () => {
 describe('OverlayPanel component', () => {
   const theme = mockTheme()
 
-  function makePanel(done: (v?: 'toggle-lang' | undefined) => void) {
+  function makePanel(done: (v?: 'toggle-currency' | undefined) => void) {
     return new OverlayPanel(
       ['  line one', '', '  line two with some content'],
       'Title',
@@ -109,31 +122,31 @@ describe('OverlayPanel component', () => {
   }
 
   it('closes with undefined on escape', () => {
-    let result: 'toggle-lang' | undefined = 'toggle-lang'
+    let result: 'toggle-currency' | undefined = 'toggle-currency'
     const panel = makePanel((v) => (result = v))
     panel.handleInput('\u001b') // raw ESC byte
     expect(result).toBeUndefined()
   })
 
-  it('signals language toggle on L', () => {
-    let result: 'toggle-lang' | undefined
+  it('signals currency toggle on L', () => {
+    let result: 'toggle-currency' | undefined
     const panel = makePanel((v) => (result = v))
     panel.handleInput('l')
-    expect(result).toBe('toggle-lang')
+    expect(result).toBe('toggle-currency')
   })
 
-  it('signals language toggle on uppercase L', () => {
-    let result: 'toggle-lang' | undefined
+  it('signals currency toggle on uppercase L', () => {
+    let result: 'toggle-currency' | undefined
     const panel = makePanel((v) => (result = v))
     panel.handleInput('L')
-    expect(result).toBe('toggle-lang')
+    expect(result).toBe('toggle-currency')
   })
 
   it('ignores other keys', () => {
-    let result: 'toggle-lang' | undefined = 'toggle-lang'
+    let result: 'toggle-currency' | undefined = 'toggle-currency'
     const panel = makePanel((v) => (result = v))
     panel.handleInput('x')
-    expect(result).toBe('toggle-lang')
+    expect(result).toBe('toggle-currency')
   })
 
   it('renders a bordered box with aligned widths', () => {

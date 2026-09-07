@@ -1,7 +1,8 @@
 /**
- * Config tests: settings.json loading (global + project override), locale
- * handling, official peak-hour helpers, and writeLocale persistence. Legacy
- * peakPricing/peakMultiplier/peakHours keys are ignored.
+ * Config tests: settings.json loading (global + project override), locale and
+ * currency handling, eurRate validation, official peak-hour helpers, and
+ * writeCurrency persistence. Legacy peakPricing/peakMultiplier/peakHours keys
+ * are ignored.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -9,11 +10,12 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  DEFAULT_EUR_RATE,
   isPeakHour,
   loadDeepseekCostConfig,
   PEAK_HOURS_UTC,
   PEAK_MULTIPLIER,
-  writeLocale,
+  writeCurrency,
 } from '../src/config'
 import { createSettingsEnv, makeHarness } from './helpers'
 
@@ -44,8 +46,9 @@ describe('loadDeepseekCostConfig', () => {
     const h = makeHarness([])
     const config = loadDeepseekCostConfig(h.ctx)
     expect(config.locale).toBe('en')
-    // Legacy peak keys are silently ignored (peak pricing is intrinsic).
-    expect(Object.keys(config).sort()).toEqual(['locale'])
+    // Legacy peak keys are silently ignored (peak pricing is intrinsic);
+    // currency and eurRate are always resolved from the remaining settings.
+    expect(Object.keys(config).sort()).toEqual(['currency', 'eurRate', 'locale'])
   })
 
   it('project settings override global settings', () => {
@@ -104,12 +107,54 @@ describe('peak hour helpers', () => {
   })
 })
 
-describe('writeLocale', () => {
-  it('persists locale and preserves other settings (incl. legacy keys)', () => {
+describe('currency & eurRate resolution', () => {
+  it('defaults currency from the locale: zh → cny, en → usd', () => {
+    const h = makeHarness([])
+    env({ deepseekCost: { locale: 'zh' } })
+    expect(loadDeepseekCostConfig(h.ctx).currency).toBe('cny')
+  })
+
+  it('honors an explicit currency override (eur)', () => {
+    env({ deepseekCost: { currency: 'eur' } })
+    const h = makeHarness([])
+    expect(loadDeepseekCostConfig(h.ctx).currency).toBe('eur')
+  })
+
+  it('falls back to the locale default for an invalid currency', () => {
+    env({ deepseekCost: { locale: 'en', currency: 'gbp' } })
+    const h = makeHarness([])
+    expect(loadDeepseekCostConfig(h.ctx).currency).toBe('usd')
+  })
+
+  it('defaults eurRate to the reference constant when unset', () => {
+    env({ deepseekCost: { currency: 'eur' } })
+    const h = makeHarness([])
+    expect(loadDeepseekCostConfig(h.ctx).eurRate).toBe(DEFAULT_EUR_RATE)
+  })
+
+  it('accepts a positive finite eurRate from settings', () => {
+    env({ deepseekCost: { eurRate: 1.06 } })
+    const h = makeHarness([])
+    expect(loadDeepseekCostConfig(h.ctx).eurRate).toBe(1.06)
+  })
+
+  it('rejects non-positive or non-numeric eurRate values', () => {
+    const h = makeHarness([])
+    env({ deepseekCost: { eurRate: 0 } })
+    expect(loadDeepseekCostConfig(h.ctx).eurRate).toBe(DEFAULT_EUR_RATE)
+    env({ deepseekCost: { eurRate: -0.5 } })
+    expect(loadDeepseekCostConfig(h.ctx).eurRate).toBe(DEFAULT_EUR_RATE)
+    env({ deepseekCost: { eurRate: 'x' } })
+    expect(loadDeepseekCostConfig(h.ctx).eurRate).toBe(DEFAULT_EUR_RATE)
+  })
+})
+
+describe('writeCurrency', () => {
+  it('persists currency and preserves other settings (incl. legacy keys)', () => {
     const e = env({ theme: 'dark', deepseekCost: { peakPricing: true }, packages: ['npm:x'] })
-    expect(writeLocale('en')).toBe(true)
+    expect(writeCurrency('eur')).toBe(true)
     const data = JSON.parse(readFileSync(join(e.dir, 'settings.json'), 'utf8'))
-    expect(data.deepseekCost.locale).toBe('en')
+    expect(data.deepseekCost.currency).toBe('eur')
     expect(data.deepseekCost.peakPricing).toBe(true)
     expect(data.theme).toBe('dark')
     expect(data.packages).toEqual(['npm:x'])

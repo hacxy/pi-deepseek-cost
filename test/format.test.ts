@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 import {
   alignRight,
   formatCny,
+  formatEur,
   formatShortTokens,
   formatTokens,
   formatUsd,
@@ -37,6 +38,7 @@ describe('money formatting', () => {
   it('formats zero compactly', () => {
     expect(formatCny(0)).toBe('¥0')
     expect(formatUsd(0)).toBe('$0')
+    expect(formatEur(0)).toBe('€0')
   })
 
   it('picks decimal precision by magnitude', () => {
@@ -47,6 +49,12 @@ describe('money formatting', () => {
     expect(formatUsd(0.14)).toBe('$0.140')
     expect(formatUsd(0.002764525)).toBe('$0.0028')
     expect(formatUsd(0.0000001)).toBe('$0.000000')
+  })
+
+  it('formats EUR like USD with the € symbol', () => {
+    expect(formatEur(1.2)).toBe('€1.20')
+    expect(formatEur(0.38778)).toBe('€0.388')
+    expect(formatEur(0.00021075)).toBe('€0.0002')
   })
 })
 

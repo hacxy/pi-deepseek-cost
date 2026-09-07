@@ -1,6 +1,6 @@
 /**
  * Extension entry tests: event wiring, status bar behavior (model-aware),
- * command guards, shortcut language toggle, and the in-panel L-key loop.
+ * command guards, shortcut currency cycle, and the in-panel L-key loop.
  */
 
 import { readFileSync } from 'node:fs'
@@ -114,6 +114,20 @@ describe('status bar (updateStatus)', () => {
     await h.handlers.session_start![0]!({}, h.ctx)
     expect(h.statuses.at(-1)).toBe('¥0')
   })
+
+  it('shows ≈€ cost for the eur currency (official USD × user rate)', async () => {
+    env({ deepseekCost: { locale: 'zh', currency: 'eur', eurRate: 0.5 } })
+    const h = makeHarness([
+      usageEntry('assistant', 'deepseek-v4-flash', {
+        input: 1000,
+        output: 300,
+        totalTokens: 1300,
+      }),
+    ])
+    await h.handlers.session_start![0]!({}, h.ctx)
+    // USD: (1000*0.22 + 300*0.66)/1e6 = 0.000418 → ×0.5 = 0.000209
+    expect(h.statuses.at(-1)).toContain('≈€0.0002')
+  })
 })
 
 describe('footer peak indicator', () => {
@@ -177,15 +191,25 @@ describe('command guards', () => {
   })
 })
 
-describe('shortcut language toggle', () => {
-  it('toggles zh → en and persists to settings.json', async () => {
+describe('shortcut currency toggle', () => {
+  it('cycles cny → usd and persists to settings.json', async () => {
     const e = env({ deepseekCost: { locale: 'zh' } })
     const h = makeHarness([])
     await h.shortcuts['ctrl+shift+l']!.handler(h.ctx)
-    expect(loadDeepseekCostConfig(h.ctx).locale).toBe('en')
+    expect(loadDeepseekCostConfig(h.ctx).currency).toBe('usd')
     const data = JSON.parse(readFileSync(join(e.dir, 'settings.json'), 'utf8'))
-    expect(data.deepseekCost.locale).toBe('en')
-    expect(h.notifies.at(-1)?.msg).toBe('Switched to English')
+    expect(data.deepseekCost.currency).toBe('usd')
+    // Language is untouched by the currency shortcut.
+    expect(data.deepseekCost.locale).toBe('zh')
+    expect(h.notifies.at(-1)?.msg).toBe('已切换货币: $')
+  })
+
+  it('cycles further usd → eur on a second press', async () => {
+    env({ deepseekCost: { locale: 'en', currency: 'usd' } })
+    const h = makeHarness([])
+    await h.shortcuts['ctrl+shift+l']!.handler(h.ctx)
+    expect(loadDeepseekCostConfig(h.ctx).currency).toBe('eur')
+    expect(h.notifies.at(-1)?.msg).toBe('Currency: €')
   })
 })
 
@@ -237,9 +261,12 @@ describe('in-panel L-key loop', () => {
     return panels.map((panel) => panel.lines.join('\n'))
   }
 
-  it('reopens /ds-cost in English after pressing L', async () => {
+  it('reopens /ds-cost in USD after pressing L (currency cycles, language unchanged)', async () => {
     const panels = await drivePanelWithKeys()
     expect(panels[0]).toContain('Token 用量')
-    expect(panels[1]).toContain('Token Usage')
+    // Language stayed zh; the *currency* cycled cny → usd.
+    expect(panels[1]).toContain('Token 用量')
+    expect(panels[1]).toContain('费用 (官方价, $)')
+    expect(panels[1]).toContain('$0.0004')
   })
 })
