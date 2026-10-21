@@ -52,6 +52,21 @@ export function usageEntry(
   }
 }
 
+/** A persisted toolResult message entry, optionally naming the tool. */
+export function toolResultEntry(
+  toolName: string,
+  usage: UsageFixture,
+  timestamp = '2025-01-01T05:00:00.000Z',
+) {
+  return {
+    type: 'message' as const,
+    id: Math.random().toString(36).slice(2),
+    parentId: null,
+    timestamp,
+    message: { role: 'toolResult' as const, toolName, usage },
+  }
+}
+
 /** A compaction entry with usage. */
 export function compactionEntry(usage: UsageFixture, timestamp = '2025-01-01T05:00:00.000Z') {
   return {

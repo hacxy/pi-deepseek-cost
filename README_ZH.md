@@ -15,7 +15,7 @@
 
 ## 功能特性
 
-- **状态栏**：实时显示当前会话累计费用（`¥0.019`），每轮结束后更新 —— 仅费用，无噪音（空会话显示 `¥0`）
+- **状态栏**：实时显示当前会话累计费用（`¥0.019`），每轮结束后更新 —— 仅费用，无噪音（空会话显示 `¥0`）。当 [pi-subagents](https://github.com/tintinweb/pi-subagents) 上报子代理用量时，以加项显示（`¥0.019 +¥0.004`）—— 见[子代理](#子代理)
 - **`/ds-cost`**：浮动弹窗 —— 分模型 token 用量（缓存命中/未命中输入、输出）、缓存命中率、CNY/USD/EUR 费用明细、峰谷拆分、另一**官方**货币对照
 - **模型感知**：仅对 **DeepSeek 原生供应商**生效（`provider: "deepseek"`，即由 DeepSeek 官方计费）；经其他供应商或网关（OpenRouter、OpenAI 兼容代理等）提供的 DeepSeek 模型同样隐身——本扩展只按 DeepSeek 官方计费口径计价
 - **中英双语 + 三币种**：语言与货币分离 —— `locale` 控制界面文字（默认 zh → ¥、en → $），`currency` 控制显示货币（`cny`/`usd` 为官方价；`eur` 按你配置的 `eurRate` 由官方美元价换算，显示带 `≈`）。弹窗内按 `L` 或全局快捷键 `Ctrl+Shift+L` 循环切换（¥ → $ → €）
@@ -94,6 +94,25 @@ pi install ./pi-deepseek-cost
 
 - 费用按模型分别计算（会话中切换模型也能正确累计）；`toolResult` / compaction 等无模型标记的用量按最近模型计费
 - 会话总额从会话文件重建，`/resume` 后依然准确
+
+## 子代理
+
+安装 [pi-subagents](https://github.com/tintinweb/pi-subagents) 并开启上报后，子代理花费会计入本扩展。
+该扩展默认关闭上报，需在 `~/.pi/agent/subagents.json`（单项目可放在 `.pi/subagents.json`）中开启：
+
+```json
+{ "reportUsage": true }
+```
+
+开启后，它会把自上次上报以来累计的子代理花费附在 `Agent` / `SubagentWorkflow` /
+`get_subagent_result` / `steer_subagent` 的工具结果上 —— 与 Pi 自身 `/cost` 读取的是同一个
+`usage` 字段。本扩展从会话文件读取并单独展示：状态栏显示 `$0.12 +$0.03`（主代理 + 已上报的
+子代理），`/ds-cost` 增加一行 `子代理 (上报)`。若 `reportUsage` 关闭（默认），子代理花费不会
+被持久化，因此不做任何猜测。
+
+局限：工具结果本身不带模型 id，子代理 token 按主会话最近使用的模型计价（峰谷按工具结果自身的
+timestamp 判定）。若子代理使用了不同模型，数值接近但不精确，与 Pi 自身对同一笔花费的
+`usage.cost.total` 可能有细微差异。
 
 ## 开发
 

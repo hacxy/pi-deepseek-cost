@@ -8,7 +8,14 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { loadDeepseekCostConfig } from '../src/config'
-import { createSettingsEnv, flush, makeHarness, shutdownHarnesses, usageEntry } from './helpers'
+import {
+  createSettingsEnv,
+  flush,
+  makeHarness,
+  shutdownHarnesses,
+  toolResultEntry,
+  usageEntry,
+} from './helpers'
 
 const restores: Array<() => void> = []
 afterEach(() => {
@@ -113,6 +120,35 @@ describe('status bar (updateStatus)', () => {
     const h = makeHarness([])
     await h.handlers.session_start![0]!({}, h.ctx)
     expect(h.statuses.at(-1)).toBe('¥0')
+  })
+
+  it('shows reported subagent spend as an addend', async () => {
+    env({ deepseekCost: { locale: 'zh' } })
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2025-01-01T11:00:00Z')) // off-peak, no ⚡
+    const h = makeHarness([
+      usageEntry('assistant', 'deepseek-v4-flash', { input: 1000, output: 300 }),
+      toolResultEntry('Agent', { input: 1000, totalTokens: 1000 }),
+    ])
+    await h.handlers.session_start![0]!({}, h.ctx)
+    // main: (1000*1.5 + 300*4.5)/1e6 = 0.00285 → ¥0.0028
+    // sub:  1000*1.5/1e6 = 0.0015 → ¥0.0015
+    expect(h.statuses.at(-1)).toBe('¥0.0028 +¥0.0015')
+  })
+
+  it('leaves the footer unchanged when no subagent usage is reported', async () => {
+    env({ deepseekCost: { locale: 'zh' } })
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2025-01-01T11:00:00Z')) // off-peak, no ⚡
+    const h = makeHarness([
+      usageEntry('assistant', 'deepseek-v4-flash', { input: 1000, output: 300 }),
+      // A plain tool result carries usage but is not delegated spend: it stays
+      // folded into the main total, so the footer is a single number.
+      toolResultEntry('bash', { input: 900 }),
+    ])
+    await h.handlers.session_start![0]!({}, h.ctx)
+    // (1900*1.5 + 300*4.5)/1e6 = 0.0042 → ¥0.0042
+    expect(h.statuses.at(-1)).toBe('¥0.0042')
   })
 
   it('shows ≈€ cost for the eur currency (official USD × user rate)', async () => {

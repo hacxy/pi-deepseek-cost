@@ -206,6 +206,12 @@ export function buildCostPanelLines(ctx: ExtensionContext, theme: Theme): string
   lines.push(row(theme.fg('dim', m.inputCacheMiss), formatTokens(g.input)))
   lines.push(row(theme.fg('dim', m.output), formatTokens(g.output)))
   lines.push(row(theme.bold(m.total), theme.bold(formatTokens(g.totalTokens))))
+  // Subagent tokens are already part of the total above; show their share so
+  // the total is not mistaken for main-agent usage only.
+  const sub = totals.subagents
+  if (sub.totalTokens > 0) {
+    lines.push(row(theme.fg('dim', m.subagents), theme.fg('muted', formatTokens(sub.totalTokens))))
+  }
   // Cache hit rate: cache-hit input / total input (cacheRead + cache-miss input).
   const totalInput = g.cacheRead + g.input
   const hitRate = totalInput > 0 ? (g.cacheRead / totalInput) * 100 : null
@@ -266,6 +272,16 @@ export function buildCostPanelLines(ctx: ExtensionContext, theme: Theme): string
           )
         }
       }
+    }
+    // Reported subagent spend, already included in the session total below.
+    const subCost = money.modelCost(sub)
+    if (subCost > 0) {
+      lines.push(
+        row(
+          theme.fg('dim', m.subagents),
+          `${money.fmt(subCost)}  ${theme.fg('dim', formatShortTokens(sub.totalTokens) + ' tok')}`,
+        ),
+      )
     }
     // Peak/off-peak split (official peak pricing, always shown).
     const offpeak = money.offpeak(g)
