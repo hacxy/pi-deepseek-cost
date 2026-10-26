@@ -15,7 +15,7 @@
 
 ## Features
 
-- **Status bar**: live cumulative cost for the current session (`¥0.019`), refreshed after every turn — cost only, no noise (an empty session shows `¥0`)
+- **Status bar**: live cumulative cost for the current session (`¥0.019`), refreshed after every turn — cost only, no noise (an empty session shows `¥0`). Subagent spend appears as an addend (`¥0.019 +¥0.004`) when [pi-subagents](https://github.com/tintinweb/pi-subagents) reports it — see [Subagents](#subagents).
 - **`/ds-cost`**: floating overlay panel — per-model token usage (cache-hit / cache-miss input, output), cache hit rate, CNY/USD/EUR cost breakdown, peak-hour split, cross-reference to the other _official_ currency
 - **Model-aware**: active only when the model runs on the **native DeepSeek provider** (`provider: "deepseek"` — i.e. billed by DeepSeek itself); DeepSeek models served through other providers or gateways (OpenRouter, OpenAI-compatible proxies, …) keep the extension invisible, since only official DeepSeek billing can be priced here
 - **Bilingual + currency**: language and currency are separate — `locale` controls UI text (default zh → ¥, en → $), `currency` controls display (`cny`/`usd` official; `eur` = official USD prices × your `eurRate`, shown `≈`). Cycle the currency inside the panel with `L` or globally with `Ctrl+Shift+L` (¥ → $ → €)
@@ -94,6 +94,28 @@ Peak/off-peak pricing is official and always in effect. Each message is charged 
 
 - Cost is computed per model (model switches mid-session aggregate correctly); `toolResult` / compaction usage uses the last known model
 - Session totals rebuild from the session file, so they stay accurate after `/resume`
+
+## Subagents
+
+Subagent spend is included when [pi-subagents](https://github.com/tintinweb/pi-subagents) is
+installed and reporting it. That extension keeps it off by default; set it in
+`~/.pi/agent/subagents.json` (or `.pi/subagents.json` for one project):
+
+```json
+{ "reportUsage": true }
+```
+
+It then attaches the delegated spend accumulated since its last report to its `Agent` /
+`SubagentWorkflow` / `get_subagent_result` / `steer_subagent` tool results — the same `usage`
+field pi's own `/cost` reads. This extension reads that from the session file and shows it
+separately: the footer reads `$0.12 +$0.03` (main + reported subagents) and `/ds-cost` keeps a
+`Subagents (reported)` row. With `reportUsage` off (the default) subagent spend is not
+persisted anywhere, so nothing is shown rather than guessed.
+
+Limitation: a tool result carries no model id, so subagent tokens are priced at the main
+session's last model (per the tool result's own timestamp for peak/off-peak). If a subagent
+runs a different model, the figure is close but not exact, and can differ slightly from pi's
+own `usage.cost.total` for the same spend.
 
 ## Development
 

@@ -7,7 +7,7 @@ import { visibleWidth } from '@earendil-works/pi-tui'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { buildCostPanelLines, OverlayPanel } from '../src/panel'
-import { createSettingsEnv, makeHarness, mockTheme, usageEntry } from './helpers'
+import { createSettingsEnv, makeHarness, mockTheme, toolResultEntry, usageEntry } from './helpers'
 
 const restores: Array<() => void> = []
 afterEach(() => {
@@ -70,6 +70,22 @@ describe('buildCostPanelLines', () => {
     expect(lines).toContain('¥0.0029')
     expect(lines).toContain('L toggle currency · Esc to close')
     expect(lines).not.toContain('合计')
+  })
+
+  it('labels reported subagent spend separately from the main agent', () => {
+    env({ deepseekCost: { locale: 'en' } })
+    const entries = [
+      ...FLASH_ENTRY(),
+      toolResultEntry('Agent', { input: 2000, output: 500, totalTokens: 2500 }),
+    ]
+    const h = makeHarness(entries)
+    const lines = buildCostPanelLines(h.ctx, mockTheme()).join('\n')
+
+    // Main agent cost only on its own rows; the subagent share is labelled.
+    expect(lines).toContain('Subagents (reported)')
+    expect(lines).toContain('2,500')
+    // Session total includes both: 0.000418 + 0.00077 = 0.001188 → $0.0012.
+    expect(lines).toContain('$0.0012')
   })
 
   it('always shows the peak/off-peak split (official pricing)', () => {

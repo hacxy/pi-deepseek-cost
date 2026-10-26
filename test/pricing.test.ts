@@ -16,7 +16,13 @@ import {
   sessionCostEur,
   sessionCostUsd,
 } from '../src/pricing'
-import { compactionEntry, createSettingsEnv, makeHarness, usageEntry } from './helpers'
+import {
+  compactionEntry,
+  createSettingsEnv,
+  makeHarness,
+  toolResultEntry,
+  usageEntry,
+} from './helpers'
 
 const restores: Array<() => void> = []
 afterEach(() => {
@@ -215,5 +221,86 @@ describe('computeSessionTotals', () => {
     expect(g.input).toBe(300)
     expect(g.output).toBe(30)
     expect(g.totalTokens).toBe(330)
+  })
+})
+
+describe('subagent spend', () => {
+  it('keeps reported subagent spend out of byModel and adds it to the totals', () => {
+    env()
+    const entries = [
+      usageEntry('assistant', 'deepseek-v4-flash', {
+        input: 1000,
+        output: 300,
+        totalTokens: 1300,
+      }),
+      toolResultEntry('Agent', { input: 2000, output: 500, totalTokens: 2500 }),
+    ]
+    const h = makeHarness(entries)
+    const totals = computeSessionTotals(h.ctx)
+    const main = totals.byModel.get('deepseek-v4-flash')!
+
+    // The main model's own usage is untouched.
+    expect(main.input).toBe(1000)
+    expect(main.output).toBe(300)
+    // Delegated usage is bucketed separately and labelled in the UI.
+    expect(totals.subagents.input).toBe(2000)
+    expect(totals.subagents.output).toBe(500)
+    expect(totals.subagents.totalTokens).toBe(2500)
+
+    // Off-peak flash: main 0.00285, subagents 0.00525.
+    expect(modelCostCny(totals.subagents)).toBeCloseTo(0.00525, 10)
+    expect(sessionCostCny(totals)).toBeCloseTo(0.0081, 10)
+    // USD mirror: main 0.000418, subagents 0.00077.
+    expect(sessionCostUsd(totals)).toBeCloseTo(0.001188, 10)
+    // EUR derives from the subagent-inclusive USD total.
+    expect(sessionCostEur(totals, 0.5)).toBeCloseTo(0.000594, 12)
+  })
+
+  it('includes subagent tokens in grandTotals', () => {
+    env()
+    const entries = [
+      usageEntry('assistant', 'deepseek-v4-flash', { input: 100, output: 10, totalTokens: 110 }),
+      toolResultEntry('get_subagent_result', { input: 200, output: 20, totalTokens: 220 }),
+    ]
+    const h = makeHarness(entries)
+    const g = grandTotals(computeSessionTotals(h.ctx))
+    expect(g.input).toBe(300)
+    expect(g.output).toBe(30)
+    expect(g.totalTokens).toBe(330)
+  })
+
+  it('leaves usage on tools that are not subagent runners in byModel', () => {
+    env()
+    const entries = [
+      usageEntry('assistant', 'deepseek-v4-flash', { input: 100, output: 50 }),
+      toolResultEntry('bash', { input: 200, output: 100 }),
+    ]
+    const h = makeHarness(entries)
+    const totals = computeSessionTotals(h.ctx)
+    expect(totals.subagents.totalTokens).toBe(0)
+    expect(totals.byModel.get('deepseek-v4-flash')!.input).toBe(300)
+  })
+
+  it('prices subagent spend at the last assistant model', () => {
+    env()
+    const entries = [
+      usageEntry('assistant', 'deepseek-v4-pro', { input: 10, output: 1 }),
+      // No model id on a tool result; the pro rate must still apply.
+      toolResultEntry('Agent', { input: 1000, output: 100 }),
+    ]
+    const h = makeHarness(entries)
+    const totals = computeSessionTotals(h.ctx)
+    // Pro off-peak: (1000*4.5 + 100*13.5)/1e6 = 0.00585.
+    expect(modelCostCny(totals.subagents)).toBeCloseTo(0.00585, 10)
+  })
+
+  it('does not invent cost for subagent usage before any known model', () => {
+    env()
+    const h = makeHarness([
+      toolResultEntry('Agent', { input: 1000, output: 100, totalTokens: 1100 }),
+    ])
+    const totals = computeSessionTotals(h.ctx)
+    expect(totals.subagents.totalTokens).toBe(1100)
+    expect(sessionCostCny(totals)).toBeNull()
   })
 })

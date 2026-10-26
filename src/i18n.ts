@@ -34,6 +34,8 @@ export interface Messages {
   total: string
   cacheHitRate: string
   perModel: string
+  /** Reported subagent spend (pi-subagents `reportUsage`). */
+  subagents: string
 
   /** Cost section title for the primary display currency. */
   costSection: (cur: Currency) => string
@@ -74,6 +76,7 @@ const zh: Messages = {
   total: '合计',
   cacheHitRate: '缓存命中率',
   perModel: '分模型',
+  subagents: '子代理 (上报)',
 
   costSection: (cur) =>
     cur === 'cny'
@@ -117,6 +120,7 @@ const en: Messages = {
   total: 'Total',
   cacheHitRate: 'Cache Hit Rate',
   perModel: 'By Model',
+  subagents: 'Subagents (reported)',
 
   costSection: (cur) =>
     cur === 'cny'

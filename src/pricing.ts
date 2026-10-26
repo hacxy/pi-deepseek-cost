@@ -104,6 +104,24 @@ export const DEEPSEEK_RATES: Record<string, ModelRate> = {
 // Totals aggregation
 // ---------------------------------------------------------------------------
 
+/**
+ * Tool names whose results can carry delegated (subagent) spend in `usage`.
+ *
+ * Subagents run in their own pi sessions, so their tokens never show up as
+ * assistant messages here. When `@tintinweb/pi-subagents` has `reportUsage` on
+ * it attaches the spend accumulated since its previous report to whichever of
+ * these results comes next (pi then folds the same number into
+ * `getSessionStats()`); with `reportUsage` off — the default — it is not
+ * persisted at all, so it cannot be reconstructed. Literal names keep this
+ * extension free of a dependency on that package.
+ */
+const SUBAGENT_TOOL_NAMES: ReadonlySet<string> = new Set([
+  'Agent',
+  'SubagentWorkflow',
+  'get_subagent_result',
+  'steer_subagent',
+])
+
 export interface ModelTotals {
   input: number
   cacheRead: number
@@ -126,6 +144,11 @@ interface UsageLike {
 
 export interface SessionTotals {
   byModel: Map<string, ModelTotals>
+  /**
+   * Delegated (subagent) spend, kept out of `byModel` so the UI can label it.
+   * The session totals below include it.
+   */
+  subagents: ModelTotals
 }
 
 function emptyModelTotals(): ModelTotals {
@@ -154,7 +177,7 @@ function addUsage(totals: ModelTotals, usage: UsageLike): void {
  * across branches, and includes nested tool LLM calls and compactions.
  */
 export function computeSessionTotals(ctx: ExtensionContext): SessionTotals {
-  const totals: SessionTotals = { byModel: new Map() }
+  const totals: SessionTotals = { byModel: new Map(), subagents: emptyModelTotals() }
   let lastModelId: string | undefined
 
   const getModelTotals = (modelId: string | undefined): ModelTotals => {
@@ -171,6 +194,7 @@ export function computeSessionTotals(ctx: ExtensionContext): SessionTotals {
   for (const entry of ctx.sessionManager.getEntries()) {
     let usage: UsageLike
     let modelId: string | undefined
+    let isSubagent = false
 
     if (entry.type === 'message') {
       const msg = entry.message
@@ -179,6 +203,11 @@ export function computeSessionTotals(ctx: ExtensionContext): SessionTotals {
       if (!u) continue
       usage = u
       modelId = msg.role === 'assistant' ? (msg.model as string | undefined) : undefined
+      // Delegated spend rides on pi-subagents' tool results (see above).
+      isSubagent =
+        msg.role === 'toolResult' && typeof msg.toolName === 'string'
+          ? SUBAGENT_TOOL_NAMES.has(msg.toolName)
+          : false
     } else if ((entry.type === 'compaction' || entry.type === 'branch_summary') && entry.usage) {
       // Compaction / branch summaries are LLM work too.
       usage = entry.usage
@@ -187,7 +216,7 @@ export function computeSessionTotals(ctx: ExtensionContext): SessionTotals {
       continue
     }
 
-    const m = getModelTotals(modelId)
+    const m = isSubagent ? totals.subagents : getModelTotals(modelId)
     addUsage(m, usage)
 
     // Cost per entry in both currencies, peak-aware. cacheWrite is billed as
@@ -235,19 +264,23 @@ export function computeSessionTotals(ctx: ExtensionContext): SessionTotals {
   return totals
 }
 
-/** Aggregate every model's totals into one. */
+/** Add one bucket's totals into another (mutates `into`). */
+function addTotals(into: ModelTotals, from: ModelTotals): void {
+  into.input += from.input
+  into.cacheRead += from.cacheRead
+  into.output += from.output
+  into.totalTokens += from.totalTokens
+  into.cny.peak += from.cny.peak
+  into.cny.offpeak += from.cny.offpeak
+  into.usd.peak += from.usd.peak
+  into.usd.offpeak += from.usd.offpeak
+}
+
+/** Aggregate every model's totals, plus reported subagent spend, into one. */
 export function grandTotals(session: SessionTotals): ModelTotals {
   const g = emptyModelTotals()
-  for (const m of session.byModel.values()) {
-    g.input += m.input
-    g.cacheRead += m.cacheRead
-    g.output += m.output
-    g.totalTokens += m.totalTokens
-    g.cny.peak += m.cny.peak
-    g.cny.offpeak += m.cny.offpeak
-    g.usd.peak += m.usd.peak
-    g.usd.offpeak += m.usd.offpeak
-  }
+  for (const m of session.byModel.values()) addTotals(g, m)
+  addTotals(g, session.subagents)
   return g
 }
 
@@ -279,6 +312,9 @@ export function sessionCostCny(session: SessionTotals): number | null {
     if (m.cny.peak > 0 || m.cny.offpeak > 0) hasKnownRate = true
     total += modelCostCny(m)
   }
+  const sub = session.subagents
+  if (sub.cny.peak > 0 || sub.cny.offpeak > 0) hasKnownRate = true
+  total += modelCostCny(sub)
   return hasKnownRate ? total : null
 }
 
@@ -290,6 +326,9 @@ export function sessionCostUsd(session: SessionTotals): number | null {
     if (m.usd.peak > 0 || m.usd.offpeak > 0) hasKnownRate = true
     total += modelCostUsd(m)
   }
+  const sub = session.subagents
+  if (sub.usd.peak > 0 || sub.usd.offpeak > 0) hasKnownRate = true
+  total += modelCostUsd(sub)
   return hasKnownRate ? total : null
 }
 

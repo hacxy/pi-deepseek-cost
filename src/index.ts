@@ -27,7 +27,15 @@ import { isPeakHour, loadDeepseekCostConfig, writeCurrency } from './config'
 import { formatCny, formatEur, formatUsd } from './format'
 import { getMessages } from './i18n'
 import { buildCostPanelLines, OverlayPanel } from './panel'
-import { computeSessionTotals, sessionCostCny, sessionCostEur, sessionCostUsd } from './pricing'
+import {
+  computeSessionTotals,
+  modelCostCny,
+  modelCostEur,
+  modelCostUsd,
+  sessionCostCny,
+  sessionCostEur,
+  sessionCostUsd,
+} from './pricing'
 
 // ---------------------------------------------------------------------------
 // Model detection
@@ -70,11 +78,23 @@ function updateStatus(ctx: ExtensionContext, now: Date = new Date()): void {
       : currency === 'usd'
         ? sessionCostUsd(totals)
         : sessionCostEur(totals, eurRate)
-  const costText = total !== null ? theme.fg('success', fmt(total)) : theme.fg('dim', fmt(0))
+  // Subagent spend (reported on pi-subagents' tool results) is part of the
+  // session total; render it as an addend so the footer still separates the
+  // main agent's cost from delegated work. Without subagents this is exactly
+  // the old output (`total` is then the main agent's cost).
+  const subCost =
+    currency === 'cny'
+      ? modelCostCny(totals.subagents)
+      : currency === 'usd'
+        ? modelCostUsd(totals.subagents)
+        : modelCostEur(totals.subagents, eurRate)
+  const costText =
+    total !== null ? theme.fg('success', fmt(total - subCost)) : theme.fg('dim', fmt(0))
+  const subText = subCost > 0 ? theme.fg('dim', ` +${fmt(subCost)}`) : ''
   // Peak indicator: when the current time is inside an official peak window,
   // append a warning-colored lightning bolt so the footer shows peak is live.
   const peakMark = isPeakHour(now) ? theme.fg('warning', ' ⚡') : ''
-  ctx.ui.setStatus('ds-cost', costText + peakMark)
+  ctx.ui.setStatus('ds-cost', costText + subText + peakMark)
 }
 
 // ---------------------------------------------------------------------------
